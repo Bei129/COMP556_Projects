@@ -53,10 +53,10 @@ int main(int argc, char **argv)
   hints.ai_family = AF_INET; /* indicates we want IPv4 */
 
   /*调试手动参数，启动后需删除*/
-  argv[1]="127.0.0.1";
-  argv[2]="18277";
-  argv[3]="2000";
-  argv[4]="10";
+  // argv[1]="127.0.0.1";
+  // argv[2]="18277";
+  // argv[3]="60000";
+  // argv[4]="10";
 
 
   if (getaddrinfo(argv[1], NULL, &hints, &getaddrinfo_result) == 0)
@@ -129,7 +129,7 @@ int main(int argc, char **argv)
     *(int64_t *)(sendbuffer + 2) = htobe64(start.tv_sec);   // store tvsec
     *(int64_t *)(sendbuffer + 10) = htobe64(start.tv_usec); // store tvusec
 
-    //固定18吧？
+
     printf("Send %d bytes from %zu bytes sendbuffer.\nData:", size,sizeof(sendbuffer));
     for (int j = 0; j < size; j++)
     {

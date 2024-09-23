@@ -330,8 +330,7 @@ int main(int argc, char **argv)
             log_debug("Received %d bytes from socket %d", count, current->socket);
 
             int expectedSize = ntohs(*(uint16_t *)current->buf); // 假设消息的大小存储在前两个字节
-            
-            // current->buf=(char *)malloc(expectedSize + 1);
+            current->buf=(char *)malloc(expectedSize + 1);
             // memset(current->buf,0,expectedSize);
             
             // 假设已经读入了size&time
@@ -339,7 +338,7 @@ int main(int argc, char **argv)
             // 循环接收完整的消息
             while (totalReceived < expectedSize)
             {
-              int received = recv(current->socket, current->buf + totalReceived, expectedSize - totalReceived, 0);
+              int received = recv(current->socket, current->buf, expectedSize - totalReceived, 0);
               if (received < 0)
               {
                 if (errno != EAGAIN && errno != EWOULDBLOCK)
