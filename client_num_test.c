@@ -131,11 +131,11 @@ int main(int argc, char **argv)
 
 
     printf("Send %d bytes from %zu bytes sendbuffer.\nData:", size,sizeof(sendbuffer));
-    for (int j = 0; j < size; j++)
-    {
-      printf("%02X ", ((unsigned char *)sendbuffer)[j]);
-    }
-    printf("\n");
+    // for (int j = 0; j < size; j++)
+    // {
+    //   printf("%02X ", ((unsigned char *)sendbuffer)[j]);
+    // }
+    // printf("\n");
 
     // Log the attempt to send data
     log_debug("Attempt to send data packet %d", i + 1);
