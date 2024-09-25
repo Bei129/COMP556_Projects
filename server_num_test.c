@@ -90,7 +90,7 @@ int main(int argc, char **argv)
 {
 
   /*调试手动参数，启动后需删除*/
-  argv[1]="18277";
+  //argv[1]="18277";
 
   /* server socket address variables */
   struct sockaddr_in sin, addr;
