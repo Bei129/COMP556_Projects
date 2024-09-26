@@ -5,13 +5,13 @@ CFLAGS	 	= -Wall -g
 LDFLAGS	 	= 
 DEFS 	 	=
 
-all:	server_num_test client_num_test
+all:	server client
 
-server_num_test: server_num_test.c
-	$(CC) $(DEFS) $(CFLAGS) $(LIB) -o server_num_test server_num_test.c
+server: server.c
+	$(CC) $(DEFS) $(CFLAGS) $(LIB) -o server server.c
 
-client_num_test: client_num_test.c
-	$(CC) $(DEFS) $(CFLAGS) $(LIB) -o client_num_test client_num_test.c
+client: client.c
+	$(CC) $(DEFS) $(CFLAGS) $(LIB) -o client client.c
 
 
 
@@ -19,6 +19,6 @@ clean:
 	rm -f *.o
 	rm -f *~
 	rm -f core.*
-	rm -f server_num_test
-	rm -f client_num_test
+	rm -f server
+	rm -f client
 

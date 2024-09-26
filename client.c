@@ -7,11 +7,11 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
-
 #include <sys/time.h>
 #include <stdarg.h>
 #include <errno.h>
 
+// for local testing:self written version of htobe64
 // uint64_t htobe64(uint64_t val) {
 //     return ((val >> 56) & 0x00000000000000FF) |
 //            ((val >> 40) & 0x000000000000FF00) |
@@ -31,8 +31,6 @@ void log_debug(const char* message, ...) {
     printf("\n"); // Add new line for each log entry
 }
 
-/* simple client, takes two parameters, the server domain name,
-   and the server port number */
 
 int main(int argc, char **argv)
 {
@@ -40,19 +38,23 @@ int main(int argc, char **argv)
   //===========================
   /* our client socket */
   int sock;
-
-  /* variables for identifying the server */
   unsigned int server_addr;
   struct sockaddr_in sin;
   struct addrinfo *getaddrinfo_result, hints;
 
   struct timeval start;
+  // FILE *fp;
+  // fp = fopen("result.txt","a");
+  // gettimeofday(&start, NULL);
+  // fprintf(fp,"\n test_time: %d",start);
+  // fclose(fp);
+  
 
   /* convert server domain name to IP address */
   memset(&hints, 0, sizeof(struct addrinfo));
   hints.ai_family = AF_INET; /* indicates we want IPv4 */
 
-  /*调试手动参数，启动后需删除*/
+  /* testing template*/
   // argv[1]="127.0.0.1";
   // argv[2]="18277";
   // argv[3]="60000";
@@ -73,6 +75,7 @@ int main(int argc, char **argv)
   int count = atoi(argv[4]);
   int num;
 
+  //exceptions -> exit()
   if (size < 18 || size > 65535)
   {
     fprintf(stderr, "Size must be between 18 and 65535 bytes\n");
@@ -88,21 +91,21 @@ int main(int argc, char **argv)
   buffer = (char *)malloc(size+10);
   if (!buffer)
   {
-    perror("failed to allocated buffer");
+    // perror("failed to allocated buffer");
     abort();
   }
 
   sendbuffer = (char *)malloc(size);
   if (!sendbuffer)
   {
-    perror("failed to allocated sendbuffer");
+    // perror("failed to allocated sendbuffer");
     abort();
   }
 
   /* create a socket */
   if ((sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
   {
-    perror("opening TCP socket");
+    // perror("opening TCP socket");
     abort();
   }
 
@@ -115,14 +118,16 @@ int main(int argc, char **argv)
   /* connect to the server */
   if (connect(sock, (struct sockaddr *)&sin, sizeof(sin)) < 0)
   {
-    perror("connect to server failed");
+    // perror("connect to server failed");
     abort();
   }
-  //==========================
+  
+  //========================== Actual Client Process ========================== 
+  float sum = 0.0;
 
   for (int i = 0; i < count; i++)
   {
-    memset(buffer, 0, size);//TF: randomize buffer
+    memset(buffer, 1, size);//randomize buffer
     memset(sendbuffer, 0, 18);
     gettimeofday(&start, NULL);                             // get current time
     *(uint16_t *)(sendbuffer) = htons(size);                // store size
@@ -130,7 +135,10 @@ int main(int argc, char **argv)
     *(int64_t *)(sendbuffer + 10) = htobe64(start.tv_usec); // store tvusec
 
 
-    printf("Send %d bytes from %zu bytes sendbuffer.\nData:", size,sizeof(sendbuffer));
+    //printf("Send %d bytes from %zu bytes sendbuffer.\nData:", size,sizeof(sendbuffer));
+    
+    // print data for checking
+    
     // for (int j = 0; j < size; j++)
     // {
     //   printf("%02X ", ((unsigned char *)sendbuffer)[j]);
@@ -138,8 +146,9 @@ int main(int argc, char **argv)
     // printf("\n");
 
     // Log the attempt to send data
-    log_debug("Attempt to send data packet %d", i + 1);
+    // log_debug("Attempt to send data packet %d", i + 1);
 
+    //sending and receiving chunks until reaching the Size
     int totalSent = 0, bytesSent;
     while (totalSent < size)
     {
@@ -152,12 +161,12 @@ int main(int argc, char **argv)
         close(sock);
         exit(EXIT_FAILURE);
         // Log send failure
-        log_debug("Failed to send data: %s", strerror(errno));
+        // log_debug("Failed to send data: %s", strerror(errno));
         break;
       }
       totalSent += bytesSent;
       // Log each chunk sent
-        log_debug("Sent %d bytes; Total sent: %d bytes", bytesSent, totalSent);
+        //log_debug("Sent %d bytes; Total sent: %d bytes", bytesSent, totalSent);
 
     }
 
@@ -167,16 +176,16 @@ int main(int argc, char **argv)
       bytesReceived = recv(sock, buffer + totalReceived, size - totalReceived, 0);
       if (bytesReceived < 0)
       {
-        perror("recv() failed");
+        // perror("recv() failed");
         free(sendbuffer);
         free(buffer);
         close(sock);
         exit(EXIT_FAILURE);
-        log_debug("Failed to receive data: %s", strerror(errno));
+        // log_debug("Failed to receive data: %s", strerror(errno));
       }
       else if (bytesReceived == 0)
       {
-        fprintf(stderr, "The server closed the connection prematurely.\n");
+        // fprintf(stderr, "The server closed the connection prematurely.\n");
         free(sendbuffer);
         free(buffer);
         close(sock);
@@ -184,7 +193,7 @@ int main(int argc, char **argv)
       }
       totalReceived += bytesReceived;
       // Log each chunk received
-    log_debug("Received %d bytes; Total received: %d bytes", bytesReceived, totalReceived);
+      //log_debug("Received %d bytes; Total received: %d bytes", bytesReceived, totalReceived);
 
     }
 
@@ -195,17 +204,33 @@ int main(int argc, char **argv)
     double rtt = (end.tv_sec - start.tv_sec) * 1000.0 +
                  (end.tv_usec - start.tv_usec) / 1000.0;
 
-    // // Print the complete message received
+    // Print the complete message received
+    
     // printf("Received message: ");
     // for (int j = 0; j < size; j++)
     // {
     //   printf("%02X ", (unsigned char)recvBuffer[j]);
     // }
 
-    printf("\n");
-    printf("[%d]Round-trip time: %.3f ms\n\n",i, rtt);
+    // printf("\n");
+    // printf("[%d]Round-trip time: %.3f ms\n\n",i, rtt);
+    
+    sum+=rtt;
+    
   }
-
+  FILE *fp;
+  fp = fopen("result.txt","a");
+  float avg = sum/count;
+  printf("Average Round-trip time: %.03f ms\n",avg);
+  // txt save the result for further analysis
+  if (fp == NULL) {
+      perror("Failed to open result.txt");
+      exit(EXIT_FAILURE);
+  }
+  
+  fprintf(fp, "\nSize = %d bytes, count = %d, average latency = %.3f ms", size, count, avg);
+  fflush(fp); 
+  fclose(fp); 
   // Clean up
   free(buffer);
   free(sendbuffer);
