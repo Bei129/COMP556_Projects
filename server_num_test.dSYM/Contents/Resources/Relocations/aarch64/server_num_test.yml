@@ -2,10 +2,10 @@
 triple:          'arm64-apple-darwin'
 binary-path:     server_num_test
 relocations:
-  - { offsetInCU: 0x26, offset: 0x26, size: 0x8, addend: 0x0, symName: _log_debug, symObjAddr: 0x0, symBinAddr: 0x100002D8C, symSize: 0x40 }
-  - { offsetInCU: 0x17F, offset: 0x17F, size: 0x8, addend: 0x0, symName: _log_debug, symObjAddr: 0x0, symBinAddr: 0x100002D8C, symSize: 0x40 }
-  - { offsetInCU: 0x1B2, offset: 0x1B2, size: 0x8, addend: 0x0, symName: _dump, symObjAddr: 0x40, symBinAddr: 0x100002DCC, symSize: 0xAC }
-  - { offsetInCU: 0x200, offset: 0x200, size: 0x8, addend: 0x0, symName: _add, symObjAddr: 0xEC, symBinAddr: 0x100002E78, symSize: 0xB4 }
-  - { offsetInCU: 0x2F6, offset: 0x2F6, size: 0x8, addend: 0x0, symName: _main, symObjAddr: 0x1A0, symBinAddr: 0x100002F2C, symSize: 0xCAC }
-  - { offsetInCU: 0x6C1, offset: 0x6C1, size: 0x8, addend: 0x0, symName: __OSSwapInt16, symObjAddr: 0xE4C, symBinAddr: 0x100003BD8, symSize: 0x24 }
+  - { offsetInCU: 0x26, offset: 0x26, size: 0x8, addend: 0x0, symName: _log_debug, symObjAddr: 0x0, symBinAddr: 0x100002DA4, symSize: 0x40 }
+  - { offsetInCU: 0x174, offset: 0x174, size: 0x8, addend: 0x0, symName: _log_debug, symObjAddr: 0x0, symBinAddr: 0x100002DA4, symSize: 0x40 }
+  - { offsetInCU: 0x1A7, offset: 0x1A7, size: 0x8, addend: 0x0, symName: _dump, symObjAddr: 0x40, symBinAddr: 0x100002DE4, symSize: 0xAC }
+  - { offsetInCU: 0x1F5, offset: 0x1F5, size: 0x8, addend: 0x0, symName: _add, symObjAddr: 0xEC, symBinAddr: 0x100002E90, symSize: 0xB4 }
+  - { offsetInCU: 0x2EB, offset: 0x2EB, size: 0x8, addend: 0x0, symName: _main, symObjAddr: 0x1A0, symBinAddr: 0x100002F44, symSize: 0xC9C }
+  - { offsetInCU: 0x6B6, offset: 0x6B6, size: 0x8, addend: 0x0, symName: __OSSwapInt16, symObjAddr: 0xE3C, symBinAddr: 0x100003BE0, symSize: 0x24 }
 ...

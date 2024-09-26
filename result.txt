@@ -1,0 +1,56 @@
+
+ test_time: 1727302468
+Test 1: size = 18 bytes, count = 10, RTT = 0.159 ms
+Test 2: size = 18 bytes, count = 10, RTT = 0.130 ms
+Test 3: size = 18 bytes, count = 10, RTT = 0.123 ms
+Test 4: size = 18 bytes, count = 10, RTT = 0.102 ms
+Test 5: size = 18 bytes, count = 10, RTT = 0.121 ms
+Test 6: size = 18 bytes, count = 10, RTT = 0.107 ms
+Test 7: size = 18 bytes, count = 10, RTT = 0.114 ms
+Test 8: size = 18 bytes, count = 10, RTT = 0.097 ms
+Test 9: size = 18 bytes, count = 10, RTT = 0.097 ms
+Test 10: size = 18 bytes, count = 10, RTT = 0.097 ms
+ test_time: 1727302482
+Test 1: size = 1000 bytes, count = 10, RTT = 0.206 ms
+Test 2: size = 1000 bytes, count = 10, RTT = 0.160 ms
+Test 3: size = 1000 bytes, count = 10, RTT = 0.176 ms
+Test 4: size = 1000 bytes, count = 10, RTT = 0.165 ms
+Test 5: size = 1000 bytes, count = 10, RTT = 0.147 ms
+Test 6: size = 1000 bytes, count = 10, RTT = 0.130 ms
+Test 7: size = 1000 bytes, count = 10, RTT = 0.146 ms
+Test 8: size = 1000 bytes, count = 10, RTT = 0.158 ms
+Test 9: size = 1000 bytes, count = 10, RTT = 0.145 ms
+Test 10: size = 1000 bytes, count = 10, RTT = 0.142 ms
+ test_time: 1727302495
+Test 1: size = 5000 bytes, count = 10, RTT = 0.209 ms
+Test 2: size = 5000 bytes, count = 10, RTT = 0.172 ms
+Test 3: size = 5000 bytes, count = 10, RTT = 0.184 ms
+Test 4: size = 5000 bytes, count = 10, RTT = 0.144 ms
+Test 5: size = 5000 bytes, count = 10, RTT = 0.161 ms
+Test 6: size = 5000 bytes, count = 10, RTT = 0.133 ms
+Test 7: size = 5000 bytes, count = 10, RTT = 0.202 ms
+Test 8: size = 5000 bytes, count = 10, RTT = 0.215 ms
+Test 9: size = 5000 bytes, count = 10, RTT = 0.309 ms
+Test 10: size = 5000 bytes, count = 10, RTT = 0.153 ms
+ test_time: 1727302503
+Test 1: size = 10000 bytes, count = 10, RTT = 0.204 ms
+Test 2: size = 10000 bytes, count = 10, RTT = 0.168 ms
+Test 3: size = 10000 bytes, count = 10, RTT = 0.176 ms
+Test 4: size = 10000 bytes, count = 10, RTT = 0.166 ms
+Test 5: size = 10000 bytes, count = 10, RTT = 0.171 ms
+Test 6: size = 10000 bytes, count = 10, RTT = 0.152 ms
+Test 7: size = 10000 bytes, count = 10, RTT = 0.167 ms
+Test 8: size = 10000 bytes, count = 10, RTT = 0.168 ms
+Test 9: size = 10000 bytes, count = 10, RTT = 0.151 ms
+Test 10: size = 10000 bytes, count = 10, RTT = 0.162 ms
+ test_time: 1727302511
+Test 1: size = 35000 bytes, count = 10, RTT = 0.340 ms
+Test 2: size = 35000 bytes, count = 10, RTT = 0.272 ms
+Test 3: size = 35000 bytes, count = 10, RTT = 0.282 ms
+Test 4: size = 35000 bytes, count = 10, RTT = 0.247 ms
+Test 5: size = 35000 bytes, count = 10, RTT = 0.255 ms
+Test 6: size = 35000 bytes, count = 10, RTT = 0.234 ms
+Test 7: size = 35000 bytes, count = 10, RTT = 0.210 ms
+Test 8: size = 35000 bytes, count = 10, RTT = 0.225 ms
+Test 9: size = 35000 bytes, count = 10, RTT = 0.214 ms
+Test 10: size = 35000 bytes, count = 10, RTT = 0.217 ms
