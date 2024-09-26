@@ -95,8 +95,6 @@ We conducted experiments on the CLEAR server by repeatedly sending messages rang
 
 ### 3.2 Mathematical Analysis
 As described earlier, we calculate the latency and transmission time as follows: 
-<!-- 总延迟 = 带宽独立延迟 + 带宽相关传输延迟
-传输时间 = 消息大小 / 带宽  -->
 - $Total\ delay = Bandwidth\text{-}independent\ delay + Bandwidth\text{-}dependent\ transmission\ delay$
 - $Transmission\ time = \frac{Message\ size}{Bandwidth}$
 
@@ -193,10 +191,10 @@ if __name__ == '__main__':
 
 <p align="center">
   <img src="image.png" 
-  alt="Message Size vs RTT" />
+  alt="Message Size vs Average Latency" />
 </p>
 
-This plot illustrates the linear relationship between message size (bytes) and Round-Trip Time (RTT, milliseconds). The linear fitting results are: slope: 0.0000016977 bytes/ms, intercept: 0.0818 ms.
+This plot illustrates the linear relationship between message size (bytes) and average latency (ms). The linear fitting results are: slope: 0.0000016977 bytes/ms, intercept: 0.0818 ms.
 - Slope: Represents the bandwidth-dependent delay, which is very small, indicating that the latency increases only slightly as the message size grows. The estimated bandwidth is relatively high, showing that the network has a strong data transmission capacity.
 - Intercept: Represents the bandwidth-independent fixed delay, reflecting the constant network overhead that doesn't change with message size.
 
