@@ -14,20 +14,23 @@
 #include <unistd.h>
 
 #include "utils.h"
+#include "crc.h"
 
 // define packet size and window size
 #define PKT_SIZE 1024
 #define WINDOW_SIZE 5
-#define TIME_OUT 5  // need more test
+#define TIME_OUT 5 // need more test
 
-struct packet {
+struct packet
+{
   int seq_num;
   char data[PKT_SIZE];
   int acked;
   struct timeval send_time;
 };
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
   int sock, opt;
   char *recv_host = NULL, *recv_port = NULL, *filename = NULL;
   struct timeval timeout;
@@ -38,28 +41,32 @@ int main(int argc, char **argv) {
   FILE *fp;
 
   // parse command line arguments
-  while ((opt = getopt(argc, argv, "r:f:")) != -1) {
-    switch (opt) {
-      case 'r':
-        recv_host = strtok(optarg, ":");
-        recv_port = strtok(NULL, ":");
-        break;
-      case 'f':
-        filename = optarg;
-        break;
-      default:
-        printf("Usage: sendfile -r <recv host>:<recv port> -f <filename>\n");
-        return 1;
+  while ((opt = getopt(argc, argv, "r:f:")) != -1)
+  {
+    switch (opt)
+    {
+    case 'r':
+      recv_host = strtok(optarg, ":");
+      recv_port = strtok(NULL, ":");
+      break;
+    case 'f':
+      filename = optarg;
+      break;
+    default:
+      printf("Usage: sendfile -r <recv host>:<recv port> -f <filename>\n");
+      return 1;
     }
   }
 
-  if (recv_host == NULL || recv_port == NULL || filename == NULL) {
+  if (recv_host == NULL || recv_port == NULL || filename == NULL)
+  {
     printf("Usage: sendfile -r <recv host>:<recv port> -f <filename>\n");
     return 1;
   }
 
   // open the file
-  if ((fp = fopen(filename, "rb")) == NULL) {
+  if ((fp = fopen(filename, "rb")) == NULL)
+  {
     perror("Error opening file");
     return 1;
   }
@@ -69,13 +76,15 @@ int main(int argc, char **argv) {
   hints.ai_family = AF_INET;
   hints.ai_socktype = SOCK_DGRAM;
 
-  if (getaddrinfo(recv_host, recv_port, &hints, &server_info) != 0) {
+  if (getaddrinfo(recv_host, recv_port, &hints, &server_info) != 0)
+  {
     perror("Error resolving server address");
     return 1;
   }
 
   // initialize and connect socket
-  if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+  if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+  {
     perror("Error opening socket");
     return 1;
   }
@@ -92,23 +101,28 @@ int main(int argc, char **argv) {
   send_addr.sin_addr.s_addr = INADDR_ANY;
   send_addr.sin_port = htons(0);
 
-  if (bind(sock, (struct sockaddr *)&send_addr, sizeof(send_addr)) < 0) {
+  if (bind(sock, (struct sockaddr *)&send_addr, sizeof(send_addr)) < 0)
+  {
     perror("Error binding socket");
     return 1;
   }
 
   // After socket is bound, call getsockname to get the assigned port
-  if (getsockname(sock, (struct sockaddr *)&send_addr, &addr_len) == -1) {
+  if (getsockname(sock, (struct sockaddr *)&send_addr, &addr_len) == -1)
+  {
     perror("getsockname");
-  } else {
+  }
+  else
+  {
     printf("Bound to local port: %d\n",
-           ntohs(send_addr.sin_port));  // Output the randomly assigned local
-                                        // port number
+           ntohs(send_addr.sin_port)); // Output the randomly assigned local
+                                       // port number
   }
 
   // create sliding window and buffer
   struct packet window[WINDOW_SIZE];
-  for (int i = 0; i < WINDOW_SIZE; i++) {
+  for (int i = 0; i < WINDOW_SIZE; i++)
+  {
     window[i].seq_num = -1;
     window[i].acked = 0;
   }
@@ -118,17 +132,21 @@ int main(int argc, char **argv) {
   int bytes_read, total_packets, eof = 0;
 
   // send file
-  while (!eof || base < next_seq_num) {
-    while (next_seq_num < base + WINDOW_SIZE && !eof) {
+  while (!eof || base < next_seq_num)
+  {
+    while (next_seq_num < base + WINDOW_SIZE && !eof)
+    {
       bytes_read = fread(window[next_seq_num % WINDOW_SIZE].data + sizeof(int),
                          1, PKT_SIZE - sizeof(int), fp);
-      if (bytes_read <= 0) {
+      if (bytes_read <= 0)
+      {
         eof = 1; // "end of file" marker packet
         int end_marker = -1;
         memcpy(window[next_seq_num % WINDOW_SIZE].data, &end_marker,
                sizeof(int));
         if (sendto(sock, window[next_seq_num % WINDOW_SIZE].data, sizeof(int),
-                   0, (struct sockaddr *)&recv_addr, addr_len) < 0) {
+                   0, (struct sockaddr *)&recv_addr, addr_len) < 0)
+        {
           perror("Error sending EOF marker packet");
           return 1;
         }
@@ -141,10 +159,15 @@ int main(int argc, char **argv) {
       memcpy(window[next_seq_num % WINDOW_SIZE].data, &next_seq_num,
              sizeof(int));
 
+      // calculate CRC
+      uint32_t crc_value = crc32(window[next_seq_num % WINDOW_SIZE].data + sizeof(int), bytes_read);
+      memcpy(window[next_seq_num % WINDOW_SIZE].data + sizeof(int) + bytes_read, &crc_value, sizeof(uint32_t));
+
       // send packet
       if (sendto(sock, window[next_seq_num % WINDOW_SIZE].data,
-                 bytes_read + sizeof(int), 0, (struct sockaddr *)&recv_addr,
-                 addr_len) < 0) {
+                 bytes_read + sizeof(int) + sizeof(uint32_t), 0, (struct sockaddr *)&recv_addr,
+                 addr_len) < 0)
+      {
         perror("Error sending packet");
         return 1;
       }
@@ -164,39 +187,48 @@ int main(int argc, char **argv) {
     timeout.tv_usec = 0;
 
     int select_retval = select(sock + 1, &read_fds, NULL, NULL, &timeout);
-    if (select_retval == -1) {
+    if (select_retval == -1)
+    {
       perror("select error");
       return 1;
     }
 
     // handle time out
-    if (select_retval == 0) {
+    if (select_retval == 0)
+    {
       // check which packets time out and retransmit them
       struct timeval current_time;
       gettimeofday(&current_time, NULL);
 
-      for (int i = base; i < next_seq_num; i++) {
+      for (int i = base; i < next_seq_num; i++)
+      {
         struct packet *pkt = &window[i % WINDOW_SIZE];
-        if (!pkt->acked) {
+        if (!pkt->acked)
+        {
           struct timeval diff;
 
-          if (diff.tv_sec >= TIME_OUT) {
+          if (diff.tv_sec >= TIME_OUT)
+          {
             // resending
             if (sendto(sock, pkt->data, PKT_SIZE, 0,
-                       (struct sockaddr *)&recv_addr, addr_len) < 0) {
+                       (struct sockaddr *)&recv_addr, addr_len) < 0)
+            {
               perror("Error resending packet");
               return 1;
             }
             printf("[resend data] Seq_num: %d\n", pkt->seq_num);
-            gettimeofday(&pkt->send_time, NULL);  // update send time
+            gettimeofday(&pkt->send_time, NULL); // update send time
           }
         }
       }
-    } else {
+    }
+    else
+    {
       // receive ACK
       char ack_buffer[32];
       if (recvfrom(sock, ack_buffer, sizeof(ack_buffer), 0,
-                   (struct sockaddr *)&recv_addr, &addr_len) < 0) {
+                   (struct sockaddr *)&recv_addr, &addr_len) < 0)
+      {
         perror("Error receiving ACK");
         return 1;
       }
@@ -210,9 +242,11 @@ int main(int argc, char **argv) {
              inet_ntoa(recv_addr.sin_addr), ntohs(recv_addr.sin_port));
 
       // update the window, acknowledge the received package
-      if (ack_num >= base && ack_num < next_seq_num) {
+      if (ack_num >= base && ack_num < next_seq_num)
+      {
         window[ack_num % WINDOW_SIZE].acked = 1;
-        while (window[base % WINDOW_SIZE].acked && base < next_seq_num) {
+        while (window[base % WINDOW_SIZE].acked && base < next_seq_num)
+        {
           base++;
         }
       }

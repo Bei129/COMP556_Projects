@@ -14,6 +14,7 @@
 #include <unistd.h>
 
 #include "utils.h"
+#include "crc.h"
 
 // define packet size
 #define PKT_SIZE 1024
