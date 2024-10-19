@@ -13,21 +13,50 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "utils.h"
 #include "crc.h"
 
-// define packet size
+// Define packet size
 #define PKT_SIZE 1024
+#define DATA_SIZE \
+  (PKT_SIZE -     \
+   sizeof(int32_t) * 3)  // 4(seq_num) + 4(data_length) + 4(crc) = 12 bytes
+
+int mkdir_p(const char *path) {
+  char tmp[512];
+  char *p = NULL;
+  size_t len;
+
+  snprintf(tmp, sizeof(tmp), "%s", path);
+  len = strlen(tmp);
+  if (len == 0) return -1;
+  if (tmp[len - 1] == '/') tmp[len - 1] = '\0';
+
+  for (p = tmp + 1; *p; p++) {
+    if (*p == '/') {
+      *p = '\0';
+      if (mkdir(tmp, S_IRWXU) != 0) {
+        if (errno != EEXIST) {
+          return -1;
+        }
+      }
+      *p = '/';
+    }
+  }
+  if (mkdir(tmp, S_IRWXU) != 0) {
+    if (errno != EEXIST) {
+      return -1;
+    }
+  }
+  return 0;
+}
 
 int main(int argc, char **argv) {
   int sock, opt;
   char *recv_port = NULL;
   struct sockaddr_in recv_addr, sender_addr;
   socklen_t addr_len = sizeof(sender_addr);
-  FILE *fp;
-  char filename[256] = "received_file.txt.recv";  // Default save file name
 
-  // parse command line arguments
+  // Parse command line arguments
   while ((opt = getopt(argc, argv, "p:")) != -1) {
     switch (opt) {
       case 'p':
@@ -43,85 +72,184 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  // open the receive file
-  if ((fp = fopen(filename, "wb")) == NULL) {
-    perror("Error opening file for writing");
-    return 1;
-  }
-
-  // create a UDP socket
+  // Create UDP socket
   if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
     perror("Error opening socket");
     return 1;
   }
 
-  // configure the receiver address
+  // Configure receiver address
   memset(&recv_addr, 0, sizeof(recv_addr));
   recv_addr.sin_family = AF_INET;
   recv_addr.sin_addr.s_addr = INADDR_ANY;
   recv_addr.sin_port = htons(atoi(recv_port));
 
-  // bind the socket
+  // Bind the socket
   if (bind(sock, (struct sockaddr *)&recv_addr, sizeof(recv_addr)) < 0) {
     perror("Error binding socket");
+    close(sock);
     return 1;
   }
 
-  // ensure the program prints to the console immediately
   printf("Listening on port %s...\n", recv_port);
-  fflush(stdout);  // Ensure immediate output to console
+  fflush(stdout);
 
-  // initializes the receive buffer
   char buffer[PKT_SIZE];
   int expected_seq_num = 0;
   int bytes_received;
 
-  // receive file data
+  // Receive file name and path
+  char file_info[256];
+  ssize_t file_info_bytes =
+      recvfrom(sock, file_info, sizeof(file_info) - 1, 0,
+               (struct sockaddr *)&sender_addr, &addr_len);
+  if (file_info_bytes < 0) {
+    perror("Error receiving file info");
+    close(sock);
+    return 1;
+  }
+  file_info[file_info_bytes] = '\0';
+  printf("[recv file info] File name: %s\n", file_info);
+
+  char path_copy[256];
+  strncpy(path_copy, file_info, sizeof(path_copy) - 1);
+  path_copy[sizeof(path_copy) - 1] = '\0';
+
+  // Find the last '/' to separate directory and file name
+  char *last_slash = strrchr(path_copy, '/');
+  char *subdir = NULL;
+  char *fname = NULL;
+
+  if (last_slash != NULL) {
+    *last_slash = '\0';
+    subdir = path_copy;
+    fname = last_slash + 1;
+
+    if (mkdir_p(subdir) != 0) {
+      perror("Error creating directories");
+      close(sock);
+      return 1;
+    }
+  } else {
+    // No subdirectory
+    subdir = ".";
+    fname = path_copy;
+  }
+
+  // Create the received file path
+  char output_filename[512];
+  snprintf(output_filename, sizeof(output_filename), "%s/%s.recv", subdir,
+           fname);
+
+  FILE *fp;
+  if ((fp = fopen(output_filename, "wb")) == NULL) {
+    perror("Error opening file for writing");
+    close(sock);
+    return 1;
+  }
+
   while (1) {
-    // receive packet
-    bytes_received = recvfrom(sock, buffer, PKT_SIZE, 0,
+    // Receive data packet
+    bytes_received = recvfrom(sock, buffer, sizeof(buffer), 0,
                               (struct sockaddr *)&sender_addr, &addr_len);
+
     if (bytes_received < 0) {
       perror("Error receiving packet");
+      fclose(fp);
+      close(sock);
       return 1;
     }
 
-    // Extract the sequence number of the packet (first 4 bytes)
-    int seq_num = *(int *)buffer;
+    if (bytes_received <
+        sizeof(int32_t) * 2 + sizeof(uint32_t)) {  // Minimum packet size
+      printf("[recv corrupt packet] Packet too small.\n");
+      continue;
+    }
 
-    // EOF check
+    // Extract seq_num and data_length, convert to host byte order
+    int32_t net_seq_num, net_data_length;
+    memcpy(&net_seq_num, buffer, sizeof(int32_t));
+    memcpy(&net_data_length, buffer + sizeof(int32_t), sizeof(int32_t));
+
+    int seq_num = ntohl(net_seq_num);
+    int data_length = ntohl(net_data_length);
+
+    // Check if data_length is valid
+    if (data_length < 0 || data_length > DATA_SIZE) {
+      printf("[recv corrupt packet] Invalid data_length: %d\n", data_length);
+      continue;
+    }
+
+    // Check if the total packet size matches
+    if (bytes_received !=
+        sizeof(int32_t) * 2 + data_length + sizeof(uint32_t)) {
+      printf(
+          "[recv corrupt packet] Packet size mismatch. Expected: %zu, "
+          "Received: %d\n",
+          sizeof(int32_t) * 2 + data_length + sizeof(uint32_t), bytes_received);
+      continue;
+    }
+
+    // Extract received CRC, convert to host byte order
+    uint32_t received_crc;
+    memcpy(&received_crc, buffer + sizeof(int32_t) * 2 + data_length,
+           sizeof(uint32_t));
+    received_crc = ntohl(received_crc);
+
+    // Calculate CRC over the first 8 + data_length bytes
+    uint32_t calculated_crc =
+        crc32((unsigned char *)buffer, sizeof(int32_t) * 2 + data_length);
+
+    if (calculated_crc != received_crc) {
+      printf(
+          "[recv corrupt packet] CRC mismatch! Received CRC: %u, Calculated "
+          "CRC: %u\n",
+          received_crc, calculated_crc);
+      continue;  // Ignore corrupted packets
+    }
+
+    // Check if this is the EOF packet
     if (seq_num == -1) {
       printf("Received EOF marker. File transfer complete.\n");
+      // Send ACK for EOF
+      char ack_buffer[32];
+      snprintf(ack_buffer, sizeof(ack_buffer), "%d", seq_num);
+      if (sendto(sock, ack_buffer, strlen(ack_buffer) + 1, 0,
+                 (struct sockaddr *)&sender_addr, addr_len) < 0) {
+        perror("Error sending ACK for EOF");
+      }
       break;
     }
 
-    printf("[recv data] Seq_num: %d, Bytes: %d from %s:%d\n", seq_num,
-           bytes_received, inet_ntoa(sender_addr.sin_addr),
-           ntohs(sender_addr.sin_port));
+    printf(
+        "[recv data] Seq_num: %d, Bytes: %d, Received CRC: %u, Calculated CRC: "
+        "%u\n",
+        seq_num, data_length, received_crc, calculated_crc);
 
     fflush(stdout);
 
-    // check whether it is the expected serial number
+    // Check if this is the expected sequence number
     if (seq_num == expected_seq_num) {
-      // Write the data to the file
+      // Write data to file
       size_t write_bytes =
-          fwrite(buffer + sizeof(int), 1, bytes_received - sizeof(int), fp);
+          fwrite(buffer + sizeof(int32_t) * 2, 1, data_length, fp);
       printf("Wrote %zu bytes to file.\n", write_bytes);
+
       expected_seq_num++;
 
-      // Send ACK to confirm receipt of the serial number
+      // Send ACK
       char ack_buffer[32];
-      sprintf(ack_buffer, "%d", seq_num);
-      if (sendto(sock, ack_buffer, sizeof(ack_buffer), 0,
+      snprintf(ack_buffer, sizeof(ack_buffer), "%d", seq_num);
+      if (sendto(sock, ack_buffer, strlen(ack_buffer) + 1, 0,
                  (struct sockaddr *)&sender_addr, addr_len) < 0) {
         perror("Error sending ACK");
       }
       printf("[send ACK] Seq_num: %d\n", seq_num);
     } else {
-      // Resend the last ACK for the expected sequence number
+      // Resend the last ACK
       char ack_buffer[32];
-      sprintf(ack_buffer, "%d", expected_seq_num - 1);
-      if (sendto(sock, ack_buffer, sizeof(ack_buffer), 0,
+      snprintf(ack_buffer, sizeof(ack_buffer), "%d", expected_seq_num - 1);
+      if (sendto(sock, ack_buffer, strlen(ack_buffer) + 1, 0,
                  (struct sockaddr *)&sender_addr, addr_len) < 0) {
         perror("Error resending ACK");
       }
@@ -132,6 +260,6 @@ int main(int argc, char **argv) {
   fclose(fp);
   close(sock);
 
-  printf("File received and saved as %s.\n", filename);
+  printf("File received and saved as %s.\n", output_filename);
   return 0;
 }
