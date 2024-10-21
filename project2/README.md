@@ -29,12 +29,15 @@ This project uses the sliding window protocol and Cyclic Redundancy Check (CRC) 
 We use an adaptive timeout mechanism to calculate RTT. 
 
 1. Estimated RTT
+   
    $\text{Estimated RTT} = \alpha \times \text{Old Estimated RTT} + (1 - \alpha) \times \text{Sample RTT}$
    - The estimated round-trip time (RTT) is calculated using a weighted average of the previous estimated RTT and the new sample RTT. 
 2. Deviation RTT
+   
    $\text{Dev RTT} = (1 - \beta) \times \text{Old Dev RTT} + \beta \times \left| \text{Sample RTT} - \text{Estimated RTT} \right|$
    - The deviation in RTT measures the variation in RTT from its estimated value. It is updated based on the difference between the current sample RTT and the estimated RTT.
 3. Timeout Interval
+   
    $\text{Timeout Interval} = \text{Estimated RTT} + 4 \times \text{Dev RTT}$
    - The timeout interval is dynamically adjusted by adding four times the RTT deviation to the estimated RTT. This ensures that the timeout accounts for both the average RTT and potential variations.
 
