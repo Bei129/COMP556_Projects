@@ -1,0 +1,27 @@
+168.4.100.250
+
+./recvfile -p 18000 > output.log 2>&1
+
+c > output1.log 2>&1
+./sendfile -r 168.4.100.250:18123 -f test/middle_test.bin > output1.log 2>&1
+./sendfile -r 128.42.128.85:18000 -f test/large_test.bin > output.log 2>&1
+./sendfile -r 128.42.128.85:18000 -f test/image.png > output.log 2>&1
+./sendfile -r 128.42.128.85:18000 -f test/video.mp4 > output.log 2>&1
+
+./sendfile -r 128.42.124.184:18000 -f test/test.bin > output1.log 2>&1
+./sendfile -r 128.42.124.184:18000 -f test/middle_test.bin > output1.log 2>&1
+./sendfile -r 128.42.124.184:18000 -f test/large_test.bin > output.log 2>&1
+./sendfile -r 128.42.124.184:18000 -f test/image.png > output.log 2>&1
+./sendfile -r 128.42.124.184:18000 -f test/video.mp4 > output.log 2>&1
+
+./sendfile -r 128.42.124.184:18123 -f test/test.bin > output1.log 2>&1
+./sendfile -r :18123 -f test/test.bin
+192.168.122.1 
+128.42.124.184
+
+
+/usr/bin/netsim --delay 20 --drop 20
+dd if=/dev/urandom of=test/middle_test.bin bs=1M count=50
+
+
+diff -s test/middle_test.bin test/middle_test.bin.recv
