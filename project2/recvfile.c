@@ -19,7 +19,7 @@
 #define PKT_SIZE 1024
 #define DATA_SIZE \
   (PKT_SIZE -     \
-   sizeof(int32_t) * 3)  // 4(seq_num) + 4(data_length) + 4(crc) = 12 bytes
+   sizeof(int32_t) * 4)  // 4(seq_num) + 4(start) 4(data_length) + 4(crc) = 16 bytes
 
 int mkdir_p(const char *path) {
   char tmp[512];
@@ -110,7 +110,7 @@ int main(int argc, char **argv) {
   }
   file_info[file_info_bytes] = '\0';
   printf("[recv file info] File name: %s\n", file_info);
-
+//____________________________________CRC check
   char path_copy[256];
   strncpy(path_copy, file_info, sizeof(path_copy) - 1);
   path_copy[sizeof(path_copy) - 1] = '\0';
@@ -161,17 +161,19 @@ int main(int argc, char **argv) {
     }
 
     if (bytes_received <
-        sizeof(int32_t) * 2 + sizeof(uint32_t)) {  // Minimum packet size
+        sizeof(int32_t) * 3 + sizeof(uint32_t)) {  // Minimum packet size
       printf("[recv corrupt packet] Packet too small.\n");
       continue;
     }
 
     // Extract seq_num and data_length, convert to host byte order
-    int32_t net_seq_num, net_data_length;
+    int32_t net_seq_num, net_start_offset, net_data_length;
     memcpy(&net_seq_num, buffer, sizeof(int32_t));
-    memcpy(&net_data_length, buffer + sizeof(int32_t), sizeof(int32_t));
+    memcpy(&net_start_offset, buffer + sizeof(int32_t), sizeof(int32_t));
+    memcpy(&net_data_length, buffer + sizeof(int32_t)*2, sizeof(int32_t));
 
     int seq_num = ntohl(net_seq_num);
+    int start_offset = ntohl(net_start_offset);
     int data_length = ntohl(net_data_length);
 
     // Check if data_length is valid
@@ -182,23 +184,23 @@ int main(int argc, char **argv) {
 
     // Check if the total packet size matches
     if (bytes_received !=
-        sizeof(int32_t) * 2 + data_length + sizeof(uint32_t)) {
+        sizeof(int32_t) * 3 + data_length + sizeof(uint32_t)) {
       printf(
           "[recv corrupt packet] Packet size mismatch. Expected: %zu, "
           "Received: %d\n",
-          sizeof(int32_t) * 2 + data_length + sizeof(uint32_t), bytes_received);
+          sizeof(int32_t) * 3 + data_length + sizeof(uint32_t), bytes_received);
       continue;
     }
 
     // Extract received CRC, convert to host byte order
     uint32_t received_crc;
-    memcpy(&received_crc, buffer + sizeof(int32_t) * 2 + data_length,
+    memcpy(&received_crc, buffer + sizeof(int32_t) * 3 + data_length,
            sizeof(uint32_t));
     received_crc = ntohl(received_crc);
 
-    // Calculate CRC over the first 8 + data_length bytes
+    // Calculate CRC over the first 12 + data_length bytes
     uint32_t calculated_crc =
-        crc32((unsigned char *)buffer, sizeof(int32_t) * 2 + data_length);
+        crc32((unsigned char *)buffer, sizeof(int32_t) * 3 + data_length);
 
     if (calculated_crc != received_crc) {
       printf(
@@ -222,9 +224,8 @@ int main(int argc, char **argv) {
     }
 
     printf(
-        "[recv data] Seq_num: %d, Bytes: %d, Received CRC: %u, Calculated CRC: "
-        "%u\n",
-        seq_num, data_length, received_crc, calculated_crc);
+        "[recv data] Seq_num: %d, Start: %d, Length: %d\n",
+        seq_num, start_offset, data_length);
 
     fflush(stdout);
 
@@ -232,8 +233,8 @@ int main(int argc, char **argv) {
     if (seq_num == expected_seq_num) {
       // Write data to file
       size_t write_bytes =
-          fwrite(buffer + sizeof(int32_t) * 2, 1, data_length, fp);
-      printf("Wrote %zu bytes to file.\n", write_bytes);
+          fwrite(buffer + sizeof(int32_t) * 3, 1, data_length, fp);
+      printf("wrote %zu bytes to file.\n", write_bytes);
 
       expected_seq_num++;
 

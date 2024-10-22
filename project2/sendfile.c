@@ -43,6 +43,15 @@ double get_time_diff(struct timeval start, struct timeval end) {
   return (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1e6;
 }
 
+struct packet
+{
+  int seq_num;
+  int start;
+  char data[PKT_SIZE];
+  int acked;
+  struct timeval send_time;
+};
+
 int main(int argc, char **argv) {
   int sock, opt;
   char *recv_host = NULL, *recv_port = NULL, *filename = NULL;
