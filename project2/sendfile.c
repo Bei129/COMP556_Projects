@@ -290,10 +290,33 @@ int main(int argc, char **argv) {
                 close(sock);
                 return 1;
             }
+            // Ensure the ACK contains both the sequence number and the CRC (at least 4 bytes for seq_num + 4 bytes for CRC)
+            if (ack_bytes < sizeof(int32_t) + sizeof(uint32_t)) {
+                printf("Received incomplete ACK. Ignoring...\n");
+                continue;
+            }
 
-            ack_buffer[ack_bytes] = '\0';
-            int ack_num = atoi(ack_buffer);
-            printf("[recv ACK] Seq_num: %d\n", ack_num);
+            int32_t net_ack_num;
+            uint32_t net_ack_crc;
+
+            memcpy(&net_ack_num, ack_buffer, sizeof(int32_t));
+            memcpy(&net_ack_crc, ack_buffer + sizeof(int32_t), sizeof(uint32_t));
+            
+            uint32_t received_crc = ntohl(net_ack_crc);
+            int ack_num = ntohl(net_ack_num);
+            
+            
+            uint32_t calculated_crc = crc32((unsigned char *)&net_ack_num, sizeof(int32_t));
+            
+            if (calculated_crc != received_crc) {
+                printf("[recv corrupt ACK] CRC mismatch. Seq_num: %d, recvCRC: %u, calcCRC: %u\n", ack_num, received_crc, calculated_crc);
+                continue;  // Ignore corrupted ACKs
+            }
+            printf("[recv ACK] Seq_num: %d, ACK CRC: %u\n", ack_num, received_crc);
+            
+            // ack_buffer[ack_bytes] = '\0';
+            // int ack_num = atoi(ack_buffer);
+            // printf("[recv ACK] Seq_num: %d\n", ack_num);
 
              // Update RTT and slide the window
             if (ack_num >= base && ack_num < next_seq_num) {
