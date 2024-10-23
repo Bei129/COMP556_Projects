@@ -34,7 +34,7 @@ double timeout_interval = INITIAL_TIMEOUT;
 
 // Function to update RTT and timeout interval
 void update_timeout(double sample_rtt) {
-  estimated_rtt = (1 - ALPHA) * estimated_rtt + ALPHA * sample_rtt;
+  estimated_rtt = (1 - ALPHA) * sample_rtt + ALPHA * estimated_rtt;
   dev_rtt = (1 - BETA) * dev_rtt + BETA * fabs(sample_rtt - estimated_rtt);
   timeout_interval = estimated_rtt + 4 * dev_rtt;
 }
@@ -308,7 +308,7 @@ int main(int argc, char **argv) {
             close(sock);
             return 1;
           }
-          printf("[resend data] Seq_num: %d\n", i);
+          // printf("[resend data] Seq_num: %d\n", i);
           gettimeofday(&send_times_arr[i % WINDOW_SIZE], NULL);
         }
       }
@@ -351,7 +351,7 @@ int main(int argc, char **argv) {
             ack_num, received_crc, calculated_crc);
         continue;  // Ignore corrupted ACKs
       }
-      printf("[recv ACK] Seq_num: %d, ACK CRC: %u\n", ack_num, received_crc);
+      // printf("[recv ACK] Seq_num: %d, ACK CRC: %u\n", ack_num, received_crc);
 
       // ack_buffer[ack_bytes] = '\0';
       // int ack_num = atoi(ack_buffer);
