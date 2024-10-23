@@ -18,7 +18,7 @@
 // Define packet size
 #define PKT_SIZE 1024
 #define DATA_SIZE (PKT_SIZE - sizeof(int32_t) * 4)  // 4(seq_num) + 4(start) + 4(data_length) + 4(crc) = 16 bytes
-#define WINDOW_SIZE 10
+#define WINDOW_SIZE 30
 
 int mkdir_p(const char *path) {
     if (!path || path[0] == '\0') return -1; // Handle null/empty path

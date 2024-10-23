@@ -17,7 +17,7 @@
 
 #define PKT_SIZE 1024
 #define DATA_SIZE (PKT_SIZE - sizeof(int32_t) * 4)  // 4(seq_num) + 4(start) + 4(data_length) + 4(crc) = 16 bytes
-#define WINDOW_SIZE 10
+#define WINDOW_SIZE 30
 
 // RTT calculation parameters for Adaptive Timeout Mechanism
 #define ALPHA 0.125
@@ -48,48 +48,59 @@ double get_time_diff(struct timeval start, struct timeval end) {
     return (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1e6;
 }
 
-// Function to send the file info and wait for ACK
-int send_file_info(int sock, struct sockaddr_in *recv_addr, socklen_t addr_len, const char *filename) {
-    uint32_t filename_crc = crc32((unsigned char *)filename, strlen(filename));
-    char file_info[256];
-    snprintf(file_info, sizeof(file_info), "%s:%u", filename, filename_crc);
-
-    int retry_count = 0;
-    const int max_retries = 5;
-
-    while (retry_count < max_retries) {
-        if (sendto(sock, file_info, strlen(file_info) + 1, 0, (struct sockaddr *)recv_addr, addr_len) < 0) {
+int send_file_info_with_timeout(int sock, const char *filename, struct sockaddr_in *recv_addr, socklen_t addr_len) {
+    while (1) {
+        uint32_t filename_crc = crc32((unsigned char *)filename, strlen(filename));
+        char file_info[256];
+        int info_size = snprintf(file_info, sizeof(file_info), "%s:%u", filename, filename_crc);
+        
+        // Send the file info packet
+        printf("1");
+        if (sendto(sock, file_info, info_size + 1, 0, (struct sockaddr *)recv_addr, addr_len) < 0) {
             perror("Error sending file info");
             return -1;
         }
-        printf("[send file info] File name: %s, CRC: %u\n", filename, filename_crc);
+        printf("[send file info] File info sent, waiting for ACK...\n");
 
-        // Wait for ACK or NACK
-        char ack_buffer[32];
-        ssize_t ack_bytes = recvfrom(sock, ack_buffer, sizeof(ack_buffer) - 1, 0, NULL, NULL);
-        if (ack_bytes < 0) {
-            if (errno == EWOULDBLOCK) {
-                printf("Timeout waiting for ACK. Retrying...\n");
-                retry_count++;
-                continue;
-            } else {
+        // Set up select() to wait for the ACK with a timeout
+        fd_set read_fds;
+        FD_ZERO(&read_fds);
+        FD_SET(sock, &read_fds);
+
+        // Configure timeout for select()
+        struct timeval timeout = { (int)timeout_interval, (timeout_interval - (int)timeout_interval) * 1e6 };
+        int select_result = select(sock + 1, &read_fds, NULL, NULL, &timeout);
+        
+        if (select_result == -1) {
+            perror("select error");
+            return 1;
+        }
+
+        if (select_result > 0) {
+            // ACK or NACK received
+            char ack_buffer[32];
+            ssize_t ack_bytes = recvfrom(sock, ack_buffer, sizeof(ack_buffer) - 1, 0, NULL, NULL);
+            if (ack_bytes < 0) {
                 perror("Error receiving ACK");
                 return -1;
             }
-        }
 
-        ack_buffer[ack_bytes] = '\0';
-        if (strcmp(ack_buffer, "ACK") == 0) {
-            printf("File info successfully received and CRC verified.\n");
-            return 0;
-        } else if (strcmp(ack_buffer, "NACK") == 0) {
-            printf("File info CRC mismatch. Retrying...\n");
-            retry_count++;
+            ack_buffer[ack_bytes] = '\0';
+            if (strcmp(ack_buffer, "ACK") == 0) {
+                printf("File info successfully received and CRC verified.\n");
+                return 0;
+            } else if (strcmp(ack_buffer, "NACK") == 0) {
+                printf("File info CRC mismatch. Retrying...\n");
+            }
+        } else if (select_result == 0) {
+            // Timeout occurred, need to retry
+            printf("Timeout waiting for ACK. Retrying...\n");
+        } else {
+            // Error in select()
+            perror("Error in select");
+            return -1;
         }
     }
-
-    printf("Failed to send file info after %d retries. Exiting.\n", max_retries);
-    return -1;
 }
 
 // Function to prepare and send a data packet
@@ -188,8 +199,9 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    // Send file info and wait for ACK
-    if (send_file_info(sock, &recv_addr, addr_len, filename) < 0) {
+    // // Send file info and wait for ACK
+    if (send_file_info_with_timeout(sock, filename, &recv_addr, addr_len) < 0) {
+        printf("Failed to send file info.\n");
         fclose(fp);
         close(sock);
         return 1;
@@ -307,7 +319,7 @@ int main(int argc, char **argv) {
             
             
             uint32_t calculated_crc = crc32((unsigned char *)&net_ack_num, sizeof(int32_t));
-            
+
             if (calculated_crc != received_crc) {
                 printf("[recv corrupt ACK] CRC mismatch. Seq_num: %d, recvCRC: %u, calcCRC: %u\n", ack_num, received_crc, calculated_crc);
                 continue;  // Ignore corrupted ACKs
