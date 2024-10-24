@@ -30,8 +30,9 @@ We use an adaptive timeout mechanism to calculate RTT.
 
 1. Estimated RTT
    
-   $\text{Estimated RTT} = \alpha \times \text{Old Estimated RTT} + (1 - \alpha) \times \text{Sample RTT}$
-   - The estimated round-trip time (RTT) is calculated using a weighted average of the previous estimated RTT and the new sample RTT. 
+   $\text{Estimated RTT} = (1 - \alpha) \times \text{Sample RTT} + \alpha \times \text{Old Estimated RTT}$
+   - The estimated round-trip time (RTT) is calculated using a weighted average of the previous estimated RTT and the new sample RTT.
+   - By reversing the order of Sample RTT and Estimated RTT in the formula, with Sample RTT being given more weight, the estimated RTT can adjust more quickly to approach the actual RTT. This helps reduce timeouts and retransmissions caused by outdated RTT calculations.
 2. Deviation RTT
    
    $\text{Dev RTT} = (1 - \beta) \times \text{Old Dev RTT} + \beta \times \left| \text{Sample RTT} - \text{Estimated RTT} \right|$
