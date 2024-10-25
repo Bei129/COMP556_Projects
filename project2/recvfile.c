@@ -21,7 +21,7 @@
   (PKT_SIZE -        \
    sizeof(int32_t) * \
        4)  // 4(seq_num) + 4(start) + 4(data_length) + 4(crc) = 16 bytes
-#define WINDOW_SIZE 30
+#define WINDOW_SIZE 20
 
 int mkdir_p(const char *path) {
   if (!path || path[0] == '\0') return -1;  // Handle null/empty path
@@ -52,6 +52,27 @@ int mkdir_p(const char *path) {
     return -1;
   }
 
+  return 0;
+}
+
+int send_ack(int seq_num, int sock, struct sockaddr_in *sender_addr, socklen_t addr_len){
+
+  char ack_buffer[32];
+  int32_t net_seq_num = htonl(seq_num);
+  memcpy(ack_buffer, &net_seq_num, sizeof(int32_t));
+
+  uint32_t ack_crc = crc32((unsigned char *)&net_seq_num, sizeof(int32_t));
+  ack_crc = htonl(ack_crc);
+
+  memcpy(ack_buffer + sizeof(int32_t), &ack_crc, sizeof(u_int32_t));
+
+  if (sendto(sock, ack_buffer, sizeof(int32_t) + sizeof(u_int32_t), 0,
+            (struct sockaddr *)sender_addr, addr_len) < 0) {
+    perror("Error sending ACK");
+    return -1;
+  }
+  printf("[send ACK] Seq_num: %d\n", seq_num);
+  
   return 0;
 }
 
@@ -300,14 +321,15 @@ int main(int argc, char **argv) {
     if (seq_num >= window_start && seq_num < window_start + WINDOW_SIZE &&
         acked[seq_num % WINDOW_SIZE]) {
       // duplicate
-      printf("[recv data] Start: %d, Length: %d, IGNORED (duplicate)\n",
-             start_offset, data_length);
+      printf("[recv data] Seq_num: %d, Start: %d, Length: %d, IGNORED (duplicate)\n",
+             seq_num, start_offset, data_length);
       continue;
     }
     if (seq_num < window_start) {
       // ignore
-      printf("[recv data] Start: %d, Length: %d, IGNORED(before window)\n",
-             start_offset, data_length);
+      printf("[recv data] Seq_num: %d, Start: %d, Length: %d, IGNORED(ACK-before window)\n",
+          seq_num,start_offset, data_length);
+      send_ack(seq_num,sock,&sender_addr,addr_len);
       continue;
     }
     if (expected_seq_num == seq_num) {
@@ -343,25 +365,27 @@ int main(int argc, char **argv) {
       acked[seq_num % WINDOW_SIZE] = 1;
     } else {
       // out-of-window ignore
-      printf("[recv data] Start: %d, Length: %d, IGNORED(out-of-window)\n",
-             start_offset, data_length);
+      printf("[recv data] Seq_num: %d, Start: %d, Length: %d, IGNORED(out-of-window)\n",
+             seq_num,start_offset, data_length);
     }
 
-    // Send ACK for the received packet
-    char ack_buffer[32];
-    net_seq_num = htonl(seq_num);
-    memcpy(ack_buffer, &net_seq_num, sizeof(int32_t));
 
-    uint32_t ack_crc = crc32((unsigned char *)&net_seq_num, sizeof(int32_t));
-    ack_crc = htonl(ack_crc);
+  // Send ACK for the received packet
+    send_ack(seq_num,sock,&sender_addr,addr_len);
+  //   char ack_buffer[32];
+  //   net_seq_num = htonl(seq_num);
+  //   memcpy(ack_buffer, &net_seq_num, sizeof(int32_t));
 
-    memcpy(ack_buffer + sizeof(int32_t), &ack_crc, sizeof(u_int32_t));
+  //   uint32_t ack_crc = crc32((unsigned char *)&net_seq_num, sizeof(int32_t));
+  //   ack_crc = htonl(ack_crc);
 
-    if (sendto(sock, ack_buffer, sizeof(int32_t) + sizeof(u_int32_t), 0,
-               (struct sockaddr *)&sender_addr, addr_len) < 0) {
-      perror("Error sending ACK");
-    }
-    printf("[send ACK] Seq_num: %d\n", seq_num);
+  //   memcpy(ack_buffer + sizeof(int32_t), &ack_crc, sizeof(u_int32_t));
+
+  //   if (sendto(sock, ack_buffer, sizeof(int32_t) + sizeof(u_int32_t), 0,
+  //              (struct sockaddr *)&sender_addr, addr_len) < 0) {
+  //     perror("Error sending ACK");
+  //   }
+  //   printf("[send ACK] Seq_num: %d\n", seq_num);
   }
 
   fclose(fp);
@@ -369,3 +393,4 @@ int main(int argc, char **argv) {
   printf("[complete] File received and saved as %s.\n", output_filename);
   return 0;
 }
+

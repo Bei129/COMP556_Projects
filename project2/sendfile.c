@@ -15,17 +15,17 @@
 
 #include "crc.h"
 
-#define PKT_SIZE 1024
+#define PKT_SIZE 1
 #define DATA_SIZE    \
   (PKT_SIZE -        \
    sizeof(int32_t) * \
        4)  // 4(seq_num) + 4(start) + 4(data_length) + 4(crc) = 16 bytes
-#define WINDOW_SIZE 30
+#define WINDOW_SIZE 20
 
 // RTT calculation parameters for Adaptive Timeout Mechanism
 #define ALPHA 0.125
 #define BETA 0.25
-#define INITIAL_TIMEOUT 1.0
+#define INITIAL_TIMEOUT 1
 
 // Global variables for RTT and timeout
 double estimated_rtt = INITIAL_TIMEOUT;
@@ -351,7 +351,7 @@ int main(int argc, char **argv) {
             ack_num, received_crc, calculated_crc);
         continue;  // Ignore corrupted ACKs
       }
-      // printf("[recv ACK] Seq_num: %d, ACK CRC: %u\n", ack_num, received_crc);
+      printf("[recv ACK] Seq_num: %d, ACK CRC: %u\n", ack_num, received_crc);
 
       // ack_buffer[ack_bytes] = '\0';
       // int ack_num = atoi(ack_buffer);
