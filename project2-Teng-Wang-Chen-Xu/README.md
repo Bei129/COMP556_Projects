@@ -43,12 +43,14 @@ This project implements a reliable file transfer system using a sliding window p
 
 ## Run commands
 
-#### Compile the program
+**IMPORTANT!!!** Running `./recvfile -p <recv port>` before `./sendfile -r <recv host>:<recv port> -f <subdir>/<filename>`
+
+### Compile the program
    ```bash
    make
    ```
 
-#### Receiving Files
+### Receiving Files
 
    Starts a file receiving program on port 18000 of the local machine to receive data packets from the network.
 
@@ -60,10 +62,10 @@ This project implements a reliable file transfer system using a sliding window p
    ./recvfile -p 18000 > output.log >&1
    ```
 
-#### Sending Files
+### Sending Files
 Sends multiple files of various types, including binary files, images, and videos, to specified IP addresses and ports.
 ```bash
-sendfile -r <recv host>:<recv port> -f <subdir>/<filename>
+./sendfile -r <recv host>:<recv port> -f <subdir>/<filename>
 ```
 e.g. 
 ```bash
@@ -72,40 +74,46 @@ e.g.
 ./sendfile -r 128.42.128.187:18000 -f test/video.mp4 > output.log 2>&1
 ```
 
-#### Network Delay and Packet Loss Simulation
+### Network Delay and Packet Loss Simulation
 The netsim tool is used to simulate a network environment with a 20 ms delay and a 20% packet drop rate; however, we actually tested a variety of different delay and drop rate configurations.
 e.g.
    ```bash
    /usr/bin/netsim --delay 20 --drop 20 --reorder 20 --mangle 20 --duplicate 20
    ```
    
-#### Random Data File Generation:
+### Random Data File Generation:
 Generates a random data file of size 50 MB for testing purposes.
    ```bash
    dd if=/dev/urandom of=test/middle_test.bin bs=1M count=50
    ```
    
-#### File Consistency Check
+### File Consistency Check
 Compares the original file with the received file to check for consistency.
    ```bash
    md5sum test/test.bin
    md5sum test/test.bin.recv
    ```
+### Memory Usage
+Check the process and Memory usage:
+```bash
+ps aux | grep recvfile
+ps aux | grep sendfile
+```
 
 ## Parameter Settings
 
 1. **PACKET_SIZE**:
-- We have defined the maximum size for the entire `PKT_SIZE` as 1024 bytes. The fields for the `Sequence Number`, `start`, `data_length`, and `crc` checksum each take up 4 bytes, since `sizeof(int32_t)` is 4 bytes. Therefore, the total size occupied by these control fields is 16 bytes.
-- To calculate the `DATA_SIZE` (the space available for the actual data), we subtract the size of these control fields from the `PKT_SIZE`: DATA_SIZE = PKT_SIZE - (4 * 4) = 1024 - 16 = 1008 bytes.
+   - We have defined the maximum size for the entire `PKT_SIZE` as 1024 bytes. The fields for the `Sequence Number`, `start`, `data_length`, and `crc` checksum each take up 4 bytes, since `sizeof(int32_t)` is 4 bytes. Therefore, the total size occupied by these control fields is 16 bytes.
+   - To calculate the `DATA_SIZE` (the space available for the actual data), we subtract the size of these control fields from the `PKT_SIZE`: DATA_SIZE = PKT_SIZE - (4 * 4) = 1024 - 16 = 1008 bytes.
    
 2. **WINDOW_SIZE**:
-- We conducted tests on the CLEAR server and look.cs.rice.edu. We calculate the `WINDOW_SIZE` based on the BDP (Bandwidth-Delay Product). The BDP is given by: BDP = Bandwidth × RTT.
-- The `WINDOW_SIZE` is computed as: WINDOW_SIZE = BDP / PACKET_SIZE.
+   - We conducted tests on the CLEAR server and look.cs.rice.edu. We calculate the `WINDOW_SIZE` based on the BDP (Bandwidth-Delay Product). The BDP is given by: BDP = Bandwidth × RTT.
+   - The `WINDOW_SIZE` is computed as: WINDOW_SIZE = BDP / PACKET_SIZE.
 
 3. **INITIAL_TIMEOUT**:
-Considering the actual RTT and rate performance, we experimented with time intervals from 1 second to 1e-5 seconds without compromising accuracy. Ultimately, 1 second achieved the highest rate.
+   - Considering the actual RTT and rate performance, we experimented with time intervals from 1 second to 1e-5 seconds without compromising accuracy. Ultimately, 1 second achieved the highest rate.
 
-4. **Straightforward and effective way to transfer FileInfo and EOF**:
+1. **Straightforward and effective way to transfer FileInfo and EOF**:
    We assume a worst-case scenario where 80% of packets are dropped and mangled, leading to a 4% success rate. This means 25 attempts are expected to yield one success. To optimize filename and EOF packet transmission, we chose to: 
    - Use special fileInfo and EOF ACKs to mark the start and end of transmission.
    - Send 25 packets at once, avoiding the inefficiency of wait-retransmit and the infinite loop of double ACK, while balancing performance and accuracy since the send time is much shorter than RTT.

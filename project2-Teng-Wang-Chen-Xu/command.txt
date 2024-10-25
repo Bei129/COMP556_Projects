@@ -1,0 +1,32 @@
+./recvfile -p 18123 > output.log
+
+./sendfile -r 128.42.128.85:18000 -f test/middle_test.bin > output1.log 2>&1
+./sendfile -r 128.42.128.85:18000 -f test/large_test.bin > output.log 2>&1
+./sendfile -r 128.42.128.85:18000 -f test/image.png > output.log 2>&1
+./sendfile -r 128.42.128.85:18000 -f test/video.mp4 > output.log 2>&1
+
+./sendfile -r 128.42.124.178:18123 -f test/test.bin > output1.log 2>&1
+./sendfile -r 128.42.124.178:18123 -f test/middle_test.bin > output1.log 2>&1
+./sendfile -r 128.42.124.187:18123 -f test/large_test.bin > output.log 2>&1
+./sendfile -r 128.42.124.187:18000 -f test/image.png > output.log 2>&1
+./sendfile -r 128.42.124.187:18000 -f test/video.mp4 > output.log 2>&1
+
+./sendfile -r 128.42.124.187:18123 -f test/test.bin > output1.log 2>&1
+
+/usr/bin/netsim --delay 100 --drop 80 --reorder 100 --mangle 80 --duplicate 100
+/usr/bin/netsim --delay 20 --drop 20 --reorder 20 --mangle 20 --duplicate 20
+dd if=/dev/urandom of=test/middle_test.bin bs=1M count=30
+dd if=/dev/urandom of=test/test.bin bs=1M count=3
+
+diff -s test/middle_test.bin test/middle_test.bin.recv
+diff -s test/image.png test/image.png.recv
+diff -s test/test.bin test/test.bin.recv
+
+md5sum test/test.bin
+md5sum test/test.bin.recv
+
+md5sum test/middle_test.bin
+md5sum test/middle_test.bin.recv
+
+ps aux | grep recvfile
+ps aux | grep sendfile
