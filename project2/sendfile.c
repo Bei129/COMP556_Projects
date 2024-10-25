@@ -19,7 +19,7 @@
 #define DATA_SIZE    \
   (PKT_SIZE -        \
    sizeof(int32_t) * \
-       4)  // 4(seq_num) + 4(start) + 4(data_length) + 4(crc) = 16 bytes
+       4) // 4(seq_num) + 4(start) + 4(data_length) + 4(crc) = 16 bytes
 #define WINDOW_SIZE 20
 
 // RTT calculation parameters for Adaptive Timeout Mechanism
@@ -33,89 +33,106 @@ double dev_rtt = 0.0;
 double timeout_interval = INITIAL_TIMEOUT;
 
 // Function to update RTT and timeout interval
-void update_timeout(double sample_rtt) {
+void update_timeout(double sample_rtt)
+{
   estimated_rtt = (1 - ALPHA) * sample_rtt + ALPHA * estimated_rtt;
   dev_rtt = (1 - BETA) * dev_rtt + BETA * fabs(sample_rtt - estimated_rtt);
   timeout_interval = estimated_rtt + 4 * dev_rtt;
 }
 
 // record current time
-double get_current_time() {
+double get_current_time()
+{
   struct timeval tv;
   gettimeofday(&tv, NULL);
   return tv.tv_sec * 1000000.0 + tv.tv_usec;
 }
 
 // Function to calculate time difference
-double get_time_diff(struct timeval start, struct timeval end) {
+double get_time_diff(struct timeval start, struct timeval end)
+{
   return (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1e6;
 }
 
 int send_file_info_with_timeout(int sock, const char *filename,
                                 struct sockaddr_in *recv_addr,
-                                socklen_t addr_len) {
-  while (1) {
-    uint32_t filename_crc = crc32((unsigned char *)filename, strlen(filename));
-    char file_info[256];
-    int info_size =
-        snprintf(file_info, sizeof(file_info), "%s:%u", filename, filename_crc);
-
-    // Send the file info packet
-    printf("1");
+                                socklen_t addr_len)
+{
+  uint32_t filename_crc = crc32((unsigned char *)filename, strlen(filename));
+  char file_info[256];
+  int info_size =
+      snprintf(file_info, sizeof(file_info), "%s:%u", filename, filename_crc);
+  int max_retry = 10, cnt = 0;
+  for (cnt = 1; cnt < max_retry; cnt++)
     if (sendto(sock, file_info, info_size + 1, 0, (struct sockaddr *)recv_addr,
-               addr_len) < 0) {
+               addr_len) < 0)
+    {
       perror("Error sending file info");
       return -1;
     }
-    printf("[send file info] File info sent, waiting for ACK...\n");
+  printf("[send file info] File info sent %d times\n", max_retry);
+  // while (cnt<max_retry) {
 
-    // Set up select() to wait for the ACK with a timeout
-    fd_set read_fds;
-    FD_ZERO(&read_fds);
-    FD_SET(sock, &read_fds);
+  //   // Send the file info packet
+  //   printf("1");
+  //   if (sendto(sock, file_info, info_size + 1, 0, (struct sockaddr *)recv_addr,
+  //              addr_len) < 0) {
+  //     perror("Error sending file info");
+  //     return -1;
+  //   }
+  //   printf("[send file info] File info sent, waiting for ACK...\n");
 
-    // Configure timeout for select()
-    struct timeval timeout = {(int)timeout_interval,
-                              (timeout_interval - (int)timeout_interval) * 1e6};
-    int select_result = select(sock + 1, &read_fds, NULL, NULL, &timeout);
+  //   // Set up select() to wait for the ACK with a timeout
+  //   fd_set read_fds;
+  //   FD_ZERO(&read_fds);
+  //   FD_SET(sock, &read_fds);
 
-    if (select_result == -1) {
-      perror("select error");
-      return 1;
-    }
+  //   // Configure timeout for select()
+  //   struct timeval timeout;
+  //   timeout.tv_sec=0;
+  //   timeout.tv_usec=300;
+  //   int select_result = select(sock + 1, &read_fds, NULL, NULL, &timeout);
+  //   cnt++;
+  //   if (select_result == -1) {
+  //     perror("select error");
+  //     return 1;
+  //   }
 
-    if (select_result > 0) {
-      // ACK or NACK received
-      char ack_buffer[32];
-      ssize_t ack_bytes =
-          recvfrom(sock, ack_buffer, sizeof(ack_buffer) - 1, 0, NULL, NULL);
-      if (ack_bytes < 0) {
-        perror("Error receiving ACK");
-        return -1;
-      }
+  //   if (select_result > 0) {
+  //     // ACK or NACK received
+  //     char ack_buffer[32];
+  //     ssize_t ack_bytes =
+  //         recvfrom(sock, ack_buffer, sizeof(ack_buffer) - 1, 0, NULL, NULL);
 
-      ack_buffer[ack_bytes] = '\0';
-      if (strcmp(ack_buffer, "ACK") == 0) {
-        printf("File info successfully received and CRC verified.\n");
-        return 0;
-      } else if (strcmp(ack_buffer, "NACK") == 0) {
-        printf("File info CRC mismatch. Retrying...\n");
-      }
-    } else if (select_result == 0) {
-      // Timeout occurred, need to retry
-      printf("Timeout waiting for ACK. Retrying...\n");
-    } else {
-      // Error in select()
-      perror("Error in select");
-      return -1;
-    }
-  }
+  //     if (ack_bytes < 0) {
+  //       perror("Error receiving ACK");
+  //       return -1;
+  //     }
+
+  //     ack_buffer[ack_bytes] = '\0';
+  //     if (strcmp(ack_buffer, "ACK") == 0) {
+  //       printf("File info successfully received and CRC verified.\n");
+  //       return 0;
+  //     } else if (strcmp(ack_buffer, "NACK") == 0) {
+  //       printf("File info CRC mismatch. Retrying...\n");
+  //     }
+  //   } else if (select_result == 0) {
+  //     // Timeout occurred, need to retry
+  //     printf("Timeout waiting for ACK. Retried [%d] times\n",cnt-1);
+  //   } else {
+  //     // Error in select()
+  //     perror("Error in select");
+  //     return -1;
+  //   }
+  // }
+  return 0;
 }
 
 // Function to prepare and send a data packet
 int send_data_packet(int sock, struct sockaddr_in *recv_addr,
                      socklen_t addr_len, char *send_buffer, char *data,
-                     int seq_num, int start_offset, int data_length) {
+                     int seq_num, int start_offset, int data_length)
+{
   int32_t net_seq_num = htonl(seq_num);
   int32_t net_data_length = htonl(data_length);
   int32_t net_start_offset = htonl(start_offset);
@@ -133,7 +150,8 @@ int send_data_packet(int sock, struct sockaddr_in *recv_addr,
 
   if (sendto(sock, send_buffer,
              sizeof(int32_t) * 3 + data_length + sizeof(uint32_t), 0,
-             (struct sockaddr *)recv_addr, addr_len) < 0) {
+             (struct sockaddr *)recv_addr, addr_len) < 0)
+  {
     perror("Error sending packet");
     return -1;
   }
@@ -144,7 +162,8 @@ int send_data_packet(int sock, struct sockaddr_in *recv_addr,
 }
 
 // Main function
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
   int sock, opt;
   char *recv_host = NULL, *recv_port = NULL, *filename = NULL;
   struct sockaddr_in recv_addr, send_addr;
@@ -153,28 +172,32 @@ int main(int argc, char **argv) {
   FILE *fp;
 
   // Parse command line arguments
-  while ((opt = getopt(argc, argv, "r:f:")) != -1) {
-    switch (opt) {
-      case 'r':
-        recv_host = strtok(optarg, ":");
-        recv_port = strtok(NULL, ":");
-        break;
-      case 'f':
-        filename = optarg;
-        break;
-      default:
-        printf("Usage: sendfile -r <recv host>:<recv port> -f <filename>\n");
-        return 1;
+  while ((opt = getopt(argc, argv, "r:f:")) != -1)
+  {
+    switch (opt)
+    {
+    case 'r':
+      recv_host = strtok(optarg, ":");
+      recv_port = strtok(NULL, ":");
+      break;
+    case 'f':
+      filename = optarg;
+      break;
+    default:
+      printf("Usage: sendfile -r <recv host>:<recv port> -f <filename>\n");
+      return 1;
     }
   }
 
-  if (recv_host == NULL || recv_port == NULL || filename == NULL) {
+  if (recv_host == NULL || recv_port == NULL || filename == NULL)
+  {
     printf("Usage: sendfile -r <recv host>:<recv port> -f <filename>\n");
     return 1;
   }
 
   // Open the file
-  if ((fp = fopen(filename, "rb")) == NULL) {
+  if ((fp = fopen(filename, "rb")) == NULL)
+  {
     perror("Error opening file");
     return 1;
   }
@@ -183,14 +206,16 @@ int main(int argc, char **argv) {
   memset(&hints, 0, sizeof(hints));
   hints.ai_family = AF_INET;
   hints.ai_socktype = SOCK_DGRAM;
-  if (getaddrinfo(recv_host, recv_port, &hints, &server_info) != 0) {
+  if (getaddrinfo(recv_host, recv_port, &hints, &server_info) != 0)
+  {
     perror("Error resolving server address");
     fclose(fp);
     return 1;
   }
 
   // Create UDP socket
-  if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+  if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+  {
     perror("Error opening socket");
     fclose(fp);
     return 1;
@@ -207,14 +232,16 @@ int main(int argc, char **argv) {
   send_addr.sin_family = AF_INET;
   send_addr.sin_addr.s_addr = INADDR_ANY;
   send_addr.sin_port = htons(0);
-  if (bind(sock, (struct sockaddr *)&send_addr, sizeof(send_addr)) < 0) {
+  if (bind(sock, (struct sockaddr *)&send_addr, sizeof(send_addr)) < 0)
+  {
     perror("Error binding socket");
     fclose(fp);
     return 1;
   }
 
   // // Send file info and wait for ACK
-  if (send_file_info_with_timeout(sock, filename, &recv_addr, addr_len) < 0) {
+  if (send_file_info_with_timeout(sock, filename, &recv_addr, addr_len) < 0)
+  {
     printf("Failed to send file info.\n");
     fclose(fp);
     close(sock);
@@ -237,12 +264,15 @@ int main(int argc, char **argv) {
   double start_time = get_current_time() / 1000000.0;
 
   // Main sending loop
-  while (!eof || base < next_seq_num) {
+  while (!eof || base < next_seq_num)
+  {
     // Send packets within the window
-    while (next_seq_num < base + WINDOW_SIZE && !eof) {
+    while (next_seq_num < base + WINDOW_SIZE && !eof)
+    {
       int bytes_read =
           fread(window_data[next_seq_num % WINDOW_SIZE], 1, DATA_SIZE, fp);
-      if (bytes_read <= 0) {
+      if (bytes_read <= 0)
+      {
         eof = 1;
         // Send EOF packet
         // if (send_data_packet(sock, &recv_addr, addr_len, send_buffer, NULL,
@@ -258,7 +288,8 @@ int main(int argc, char **argv) {
       // Send data packet
       if (send_data_packet(sock, &recv_addr, addr_len, send_buffer,
                            window_data[next_seq_num % WINDOW_SIZE],
-                           next_seq_num, start_offset, bytes_read) < 0) {
+                           next_seq_num, start_offset, bytes_read) < 0)
+      {
         fclose(fp);
         close(sock);
         return 1;
@@ -282,7 +313,8 @@ int main(int argc, char **argv) {
                               (timeout_interval - (int)timeout_interval) * 1e6};
     int select_retval = select(sock + 1, &read_fds, NULL, NULL, &timeout);
 
-    if (select_retval == -1) {
+    if (select_retval == -1)
+    {
       perror("select error");
       fclose(fp);
       close(sock);
@@ -290,20 +322,24 @@ int main(int argc, char **argv) {
     }
 
     // Handle timeout or ACK reception
-    if (select_retval == 0) {
+    if (select_retval == 0)
+    {
       // Timeout occurred, handle resending packets
       struct timeval current_time;
       gettimeofday(&current_time, NULL);
 
-      for (int i = base; i < next_seq_num; i++) {
+      for (int i = base; i < next_seq_num; i++)
+      {
         if (!acked[i % WINDOW_SIZE] &&
             get_time_diff(send_times_arr[i % WINDOW_SIZE], current_time) >=
-                timeout_interval) {
+                timeout_interval)
+        {
           // Resend packet
           if (send_data_packet(sock, &recv_addr, addr_len, send_buffer,
                                window_data[i % WINDOW_SIZE], i,
                                start[i % WINDOW_SIZE],
-                               window_data_length[i % WINDOW_SIZE]) < 0) {
+                               window_data_length[i % WINDOW_SIZE]) < 0)
+          {
             fclose(fp);
             close(sock);
             return 1;
@@ -312,14 +348,17 @@ int main(int argc, char **argv) {
           gettimeofday(&send_times_arr[i % WINDOW_SIZE], NULL);
         }
       }
-    } else {
+    }
+    else
+    {
       // Receive ACK
       char ack_buffer[32];
       struct sockaddr_in ack_addr;
       socklen_t ack_addr_len = sizeof(ack_addr);
       ssize_t ack_bytes = recvfrom(sock, ack_buffer, sizeof(ack_buffer) - 1, 0,
                                    (struct sockaddr *)&ack_addr, &ack_addr_len);
-      if (ack_bytes < 0) {
+      if (ack_bytes < 0)
+      {
         perror("Error receiving ACK");
         fclose(fp);
         close(sock);
@@ -327,7 +366,8 @@ int main(int argc, char **argv) {
       }
       // Ensure the ACK contains both the sequence number and the CRC (at least
       // 4 bytes for seq_num + 4 bytes for CRC)
-      if (ack_bytes < sizeof(int32_t) + sizeof(uint32_t)) {
+      if (ack_bytes < sizeof(int32_t) + sizeof(uint32_t))
+      {
         printf("Received incomplete ACK. Ignoring...\n");
         continue;
       }
@@ -344,12 +384,13 @@ int main(int argc, char **argv) {
       uint32_t calculated_crc =
           crc32((unsigned char *)&net_ack_num, sizeof(int32_t));
 
-      if (calculated_crc != received_crc) {
+      if (calculated_crc != received_crc)
+      {
         printf(
             "[recv corrupt ACK] CRC mismatch. Seq_num: %d, recvCRC: %u, "
             "calcCRC: %u\n",
             ack_num, received_crc, calculated_crc);
-        continue;  // Ignore corrupted ACKs
+        continue; // Ignore corrupted ACKs
       }
       printf("[recv ACK] Seq_num: %d, ACK CRC: %u\n", ack_num, received_crc);
 
@@ -358,7 +399,8 @@ int main(int argc, char **argv) {
       // printf("[recv ACK] Seq_num: %d\n", ack_num);
 
       // Update RTT and slide the window
-      if (ack_num >= base && ack_num < next_seq_num) {
+      if (ack_num >= base && ack_num < next_seq_num)
+      {
         acked[ack_num % WINDOW_SIZE] = 1;
         struct timeval ack_time;
 
@@ -366,11 +408,13 @@ int main(int argc, char **argv) {
         double sample_rtt =
             get_time_diff(send_times_arr[ack_num % WINDOW_SIZE], ack_time);
         update_timeout(sample_rtt);
-        while (acked[base % WINDOW_SIZE] && base < next_seq_num) {
+        while (acked[base % WINDOW_SIZE] && base < next_seq_num)
+        {
           base++;
         }
         // Handle EOF
-        if (ack_num == -1 && base == next_seq_num) {
+        if (ack_num == -1 && base == next_seq_num)
+        {
           break;
         }
       }
@@ -378,82 +422,94 @@ int main(int argc, char **argv) {
   }
 
   // After the main loop, send EOF packet and wait for EOF ACK
-  if (eof && base == next_seq_num) {
+  if (eof && base == next_seq_num)
+  {
     // All data packets have been sent and ACKed
     // Now send EOF and wait for EOF ACK
-    int retries = 0;
-    while (1) {
-      // Send EOF packet
+    int retries = 0, max_retry = 10;
+    for (retries = 1; retries <= max_retry; retries++)
+    {
       if (send_data_packet(sock, &recv_addr, addr_len, send_buffer, NULL, -1, 0,
-                           0) < 0) {
+                           0) < 0)
+      {
         perror("Error sending EOF packet");
         break;
       }
-      printf("[send EOF marker] Seq_num: -1\n");
-
-      // Wait for EOF ACK
-      fd_set read_fds;
-      FD_ZERO(&read_fds);
-      FD_SET(sock, &read_fds);
-
-      struct timeval timeout = {
-          (int)timeout_interval,
-          (timeout_interval - (int)timeout_interval) * 1e6};
-      int select_retval = select(sock + 1, &read_fds, NULL, NULL, &timeout);
-
-      if (select_retval == -1) {
-        perror("select error");
-        break;
-      } else if (select_retval == 0) {
-        // Timeout occurred
-        retries++;
-        printf("Timeout waiting for EOF ACK. Retrying... (Attempt %d)\n",
-               retries);
-      } else {
-        // Received ACK
-        char ack_buffer[32];
-        struct sockaddr_in ack_addr;
-        socklen_t ack_addr_len = sizeof(ack_addr);
-        ssize_t ack_bytes =
-            recvfrom(sock, ack_buffer, sizeof(ack_buffer), 0,
-                     (struct sockaddr *)&ack_addr, &ack_addr_len);
-        if (ack_bytes < 0) {
-          perror("Error receiving ACK");
-          continue;
-        }
-        // Ensure the ACK contains both the sequence number and the CRC
-        if (ack_bytes < sizeof(int32_t) + sizeof(uint32_t)) {
-          printf("Received incomplete ACK. Ignoring...\n");
-          continue;
-        }
-        int32_t net_ack_num;
-        uint32_t net_ack_crc;
-
-        memcpy(&net_ack_num, ack_buffer, sizeof(int32_t));
-        memcpy(&net_ack_crc, ack_buffer + sizeof(int32_t), sizeof(uint32_t));
-
-        uint32_t received_crc = ntohl(net_ack_crc);
-        int ack_num = ntohl(net_ack_num);
-
-        uint32_t calculated_crc =
-            crc32((unsigned char *)&net_ack_num, sizeof(int32_t));
-
-        if (calculated_crc != received_crc) {
-          printf(
-              "[recv corrupt ACK] CRC mismatch. Seq_num: %d, recvCRC: %u, "
-              "calcCRC: %u\n",
-              ack_num, received_crc, calculated_crc);
-          continue;  // Ignore corrupted ACKs
-        }
-        if (ack_num == -1) {
-          printf("[recv EOF ACK] Seq_num: %d\n", ack_num);
-          printf("EOF ACK received. Transmission complete.\n");
-          break;
-        } else {
-          printf("Received ACK for seq_num %d, expecting EOF ACK.\n", ack_num);
-        }
-      }
     }
+    printf("[send EOF marker] Seq_num: -1 %d times\n", max_retry);
+
+    // while (retries < max_retry) {
+    //   // Send EOF packet
+    //   if (send_data_packet(sock, &recv_addr, addr_len, send_buffer, NULL, -1, 0,
+    //                        0) < 0) {
+    //     perror("Error sending EOF packet");
+    //     break;
+    //   }
+    //   printf("[send EOF marker] Seq_num: -1\n");
+
+    //   // Wait for EOF ACK
+    //   fd_set read_fds;
+    //   FD_ZERO(&read_fds);
+    //   FD_SET(sock, &read_fds);
+
+    //   struct timeval timeout;
+    //   timeout.tv_sec=0;
+    //   timeout.tv_usec=300;
+    //   int select_retval = select(sock + 1, &read_fds, NULL, NULL, &timeout);
+
+    //   if (select_retval == -1) {
+    //     perror("select error");
+    //     break;
+    //   } else if (select_retval == 0) {
+    //     // Timeout occurred
+    //     retries++;
+    //     printf("Timeout waiting for EOF ACK. Retrying... (Attempt %d)\n",
+    //            retries);
+    //   } else {
+    //     // Received ACK
+    //     char ack_buffer[32];
+    //     struct sockaddr_in ack_addr;
+    //     socklen_t ack_addr_len = sizeof(ack_addr);
+    //     ssize_t ack_bytes =
+    //         recvfrom(sock, ack_buffer, sizeof(ack_buffer), 0,
+    //                  (struct sockaddr *)&ack_addr, &ack_addr_len);
+    //     if (ack_bytes < 0) {
+    //       perror("Error receiving ACK");
+    //       continue;
+    //     }
+    //     // Ensure the ACK contains both the sequence number and the CRC
+    //     if (ack_bytes < sizeof(int32_t) + sizeof(uint32_t)) {
+    //       printf("Received incomplete ACK. Ignoring...\n");
+    //       continue;
+    //     }
+    //     int32_t net_ack_num;
+    //     uint32_t net_ack_crc;
+
+    //     memcpy(&net_ack_num, ack_buffer, sizeof(int32_t));
+    //     memcpy(&net_ack_crc, ack_buffer + sizeof(int32_t), sizeof(uint32_t));
+
+    //     uint32_t received_crc = ntohl(net_ack_crc);
+    //     int ack_num = ntohl(net_ack_num);
+
+    //     uint32_t calculated_crc =
+    //         crc32((unsigned char *)&net_ack_num, sizeof(int32_t));
+
+    //     if (calculated_crc != received_crc) {
+    //       printf(
+    //           "[recv corrupt ACK] CRC mismatch. Seq_num: %d, recvCRC: %u, "
+    //           "calcCRC: %u\n",
+    //           ack_num, received_crc, calculated_crc);
+    //       continue;  // Ignore corrupted ACKs
+    //     }
+    //     if (ack_num == -1) {
+    //       printf("[recv EOF ACK] Seq_num: %d\n", ack_num);
+    //       printf("EOF ACK received. Transmission complete.\n");
+    //       break;
+    //     } else {
+    //       printf("Received ACK for seq_num %d, expecting EOF ACK.\n", ack_num);
+    //     }
+    //   }
+    // }
   }
 
   long file_size = ftell(fp);

@@ -372,21 +372,7 @@ int main(int argc, char **argv) {
 
   // Send ACK for the received packet
     send_ack(seq_num,sock,&sender_addr,addr_len);
-  //   char ack_buffer[32];
-  //   net_seq_num = htonl(seq_num);
-  //   memcpy(ack_buffer, &net_seq_num, sizeof(int32_t));
-
-  //   uint32_t ack_crc = crc32((unsigned char *)&net_seq_num, sizeof(int32_t));
-  //   ack_crc = htonl(ack_crc);
-
-  //   memcpy(ack_buffer + sizeof(int32_t), &ack_crc, sizeof(u_int32_t));
-
-  //   if (sendto(sock, ack_buffer, sizeof(int32_t) + sizeof(u_int32_t), 0,
-  //              (struct sockaddr *)&sender_addr, addr_len) < 0) {
-  //     perror("Error sending ACK");
-  //   }
-  //   printf("[send ACK] Seq_num: %d\n", seq_num);
-  }
+    }
 
   fclose(fp);
   close(sock);
