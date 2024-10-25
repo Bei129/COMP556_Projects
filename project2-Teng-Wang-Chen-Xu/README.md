@@ -164,9 +164,3 @@ $$
 
 3. **Reducing Latency**
   The sliding window protocol we designed allows for the continued reception of data without acknowledgment (ACK), which can significantly reduce network latency, especially in high-latency environments. This enables applications to respond quickly after receiving partial data, without having to wait for the confirmation of all packets.
-
-
-<script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
-<script type="text/x-mathjax-config">
-  MathJax.Hub.Config({ tex2jax: {inlineMath: [['$', '$']]}, messageStyle: "none" });
-</script>
