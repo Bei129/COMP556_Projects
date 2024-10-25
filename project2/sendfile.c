@@ -15,7 +15,7 @@
 
 #include "crc.h"
 
-#define PKT_SIZE 1
+#define PKT_SIZE 1024
 #define DATA_SIZE    \
   (PKT_SIZE -        \
    sizeof(int32_t) * \
