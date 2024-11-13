@@ -1,0 +1,69 @@
+# Test Case 1: Basic PING/PONG Exchange
+[nodes]
+0
+1
+
+[links]
+(0,1) delay 0.010 prob 0.0
+
+[events]
+# Run for 30 seconds to observe PING/PONG exchanges
+30.0 end
+
+# Expected behavior:
+# - Should see PING packets every 10 seconds
+# - Should see immediate PONG responses
+# - Port status should show as alive
+# - RTT should be around 20ms (round trip)
+
+# Test Case 2: Link Failure Detection
+[nodes]
+0
+1
+
+[links]
+(0,1) delay 0.010 prob 0.0
+
+[events]
+# Let the link establish first
+20.0 linkdying (0,1)
+# Wait for failure detection
+40.0 end
+
+# Expected behavior:
+# - Link should be detected as failed within 15 seconds after linkdying
+# - Port status should change from alive to dead
+
+# Test Case 3: Link Recovery
+[nodes]
+0
+1
+
+[links]
+(0,1) delay 0.010 prob 0.0
+
+[events]
+20.0 linkdying (0,1)
+40.0 linkcomingup (0,1)
+60.0 end
+
+# Expected behavior:
+# - Link should be detected as failed after linkdying
+# - Link should be detected as alive again after linkcomingup
+# - Port status changes should be logged
+
+# Test Case 4: Changing Link Delays
+[nodes]
+0
+1
+
+[links]
+(0,1) delay 0.010 prob 0.0
+
+[events]
+20.0 changedelay (0,1) 0.050
+40.0 end
+
+# Expected behavior:
+# - Initial RTT should be around 20ms
+# - After delay change, RTT should be around 100ms

@@ -1,0 +1,18 @@
+# tests/port_tests/basic.txt
+
+[nodes]
+0
+1
+
+[links]
+(0,1) delay 0.010 prob 0.0
+
+[events]
+# Event 1: 让系统稳定运行30秒
+30.0 end
+
+# 预期输出应该包含:
+# 1. 从时间0开始每10秒的PING消息
+# 2. 每个PING之后立即的PONG响应
+# 3. 大约20ms的RTT值(0.010s * 2)
+# 4. 端口状态变化日志(从DEAD到ALIVE)
