@@ -20,13 +20,17 @@ struct packet
 };
 #pragma pack(pop) // 恢复默认对齐
 
-struct PortStatus
-{
-    bool isAlive;
-    unsigned short neighborId;
+struct NeighborInfo {
     unsigned int lastPongTime;
     unsigned short cost;
+    bool isAlive;
 };
+
+
+struct PortStatus {
+    std::unordered_map<unsigned short, NeighborInfo> neighbors;  // key是neighborId
+};
+
 struct RouteEntry
 {
     unsigned short destination;
@@ -52,7 +56,7 @@ private:
     Node *sys;
     unsigned short router_id;
     unsigned short num_ports;
-    std::vector<PortStatus> ports;
+    std::vector<PortStatus> ports; // 数据结构不变，内容变了
 
     // 包大小相关常量 这里是12
     static const unsigned short PING_PONG_PACK_SIZE = sizeof(struct packet) + sizeof(unsigned int);
