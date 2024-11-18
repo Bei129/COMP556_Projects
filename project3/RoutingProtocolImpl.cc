@@ -31,13 +31,16 @@ void RoutingProtocolImpl::init(unsigned short num_ports, unsigned short router_i
     sys->set_alarm(this, 0, (void *)ALARM_PING);
     sys->set_alarm(this, CHECK_DURATION, (void *)ALARM_CHECK);
 
-    // DV
-    // 目前写的硬编码3和4，后面应该要改
-    sys->set_alarm(this, 0, (void *)3);
-    sys->set_alarm(this, 1000, (void *)4);
-
-    // LS
-    sys->set_alarm(this, 30000, (void *)ALARM_LS);
+    if (protocol_type == P_DV) {
+        // DV
+        // 目前写的硬编码3和4，后面应该要改
+        sys->set_alarm(this, 0, (void *)3);
+        sys->set_alarm(this, 1000, (void *)4);
+    }
+    else { 
+        // LS
+        sys->set_alarm(this, 30000, (void *)ALARM_LS);
+    }
 }
 
 void *RoutingProtocolImpl::create_packet(unsigned char type, unsigned short size)
@@ -287,9 +290,17 @@ void RoutingProtocolImpl::send_dv_update(bool triggered)
         const auto &port_neighbors = ports[port].neighbors;
 
         // 如果这个端口没有活跃的邻居，跳过
-        if (std::none_of(port_neighbors.begin(), port_neighbors.end(),
-                         [](const auto &pair)
-                         { return pair.second.isAlive; }))
+        bool has_active_neighbors = false;
+        for (const std::pair<unsigned short, NeighborInfo> &pair : port_neighbors)
+        {
+            if (pair.second.isAlive)
+            {
+                has_active_neighbors = true;
+                break;
+            }
+        }
+
+        if (!has_active_neighbors)
         {
             continue;
         }
@@ -647,7 +658,6 @@ void RoutingProtocolImpl::send_ls_update()
                                  num_neighbors * (sizeof(unsigned short) * 2);
 
     void *packet = create_packet(LS, packet_size);
-    struct packet *pkt = (struct packet *)packet;
 
     unsigned short sequence_num = ++ls_sequence_number[router_id];
     unsigned short *payload = (unsigned short *)((char *)packet + sizeof(struct packet));
