@@ -49,11 +49,6 @@ void *RoutingProtocolImpl::create_packet(unsigned char type, unsigned short size
     struct packet *header = (struct packet *)packet;
 
     header->type = type;
-    // header->reserved = 0;
-    // header->size = size;
-    // header->src = router_id;
-    // header->dst = 0;
-    // header->type = htons(type);
     header->reserved = 0;
     header->size = htons(size);
     header->src = htons(router_id);
@@ -408,7 +403,8 @@ void RoutingProtocolImpl::handle_dv_packet(unsigned short port, void *packet)
     struct packet *pkt = (struct packet *)packet;
     unsigned short src_id = ntohs(pkt->src);
     unsigned short *payload = (unsigned short *)((char *)packet + sizeof(struct packet));
-    int num_entries = (pkt->size - sizeof(struct packet)) / (sizeof(unsigned short) * 2);
+    // int num_entries = (pkt->size - sizeof(struct packet)) / (sizeof(unsigned short) * 2);
+    int num_entries = (ntohs(pkt->size) - sizeof(struct packet)) / (sizeof(unsigned short) * 2);
 
     auto &port_neighbors = ports[port].neighbors;
     auto neighbor_it = port_neighbors.find(src_id);
@@ -485,7 +481,7 @@ void RoutingProtocolImpl::recv(unsigned short port, void *packet, unsigned short
     // 检查size 是否小于 packet 结构体大小、检查 port 是否有效
     if (size < sizeof(struct packet) || port >= num_ports)
     {
-        delete[] (char *)packet;
+        // delete[] (char *)packet;
         return;
     }
 
@@ -510,7 +506,7 @@ void RoutingProtocolImpl::recv(unsigned short port, void *packet, unsigned short
     if (pkt_size != size)
     {
         printf("Packet size mismatch: expected %u, got %u\n", pkt_size, size);
-        delete[] (char *)packet;
+        // delete[] (char *)packet;
         return;
     }
     else
@@ -538,7 +534,7 @@ void RoutingProtocolImpl::recv(unsigned short port, void *packet, unsigned short
         break;
     }
 
-    delete[] (char *)packet;
+    // delete[] (char *)packet;
 }
 
 // void RoutingProtocolImpl::send_ls_update() {
