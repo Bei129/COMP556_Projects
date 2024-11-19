@@ -70,10 +70,16 @@ private:
     static const int ALARM_PING = 1;
     static const int ALARM_CHECK = 2;
     static const int ALARM_LS = 5;
+    static const int ALARM_LS_TIMEOUT = 6;
 
-    // LS相关数据结构
+    // LS相关
     std::map<unsigned short, std::map<unsigned short, unsigned int>> link_state_table;
     std::map<unsigned short, unsigned short> ls_sequence_number; 
+    std::unordered_map<unsigned short, std::unordered_map<unsigned short, unsigned int>> ls_last_update;
+
+    // 无效端口号
+    const unsigned short INVALID_PORT = 0xFFFF;
+
 
     void send_ping(unsigned short port);
     void handle_ping(unsigned short port, void *packet);
@@ -94,6 +100,8 @@ private:
     void send_ls_update(); 
     void handle_ls_packet(unsigned short port, void *packet); 
     void calculate_shortest_paths(); 
+    void check_link_state_timeout();
+    unsigned short get_port_to_neighbor(unsigned short neighbor_id);
 };
 
 #endif
