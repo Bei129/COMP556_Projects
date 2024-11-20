@@ -161,12 +161,12 @@ void RoutingProtocolImpl::handle_alarm(void *data)
     else if (alarm_type == ALARM_DV)
     {
         send_dv_update(false);
-        sys->set_alarm(this, 30000, (void *)3); // 30秒后再次更新
+        sys->set_alarm(this, 30000, (void *)ALARM_DV); 
     }
     else if (alarm_type == ALARM_DV_TIMEOUT)
     {
         check_DV_timeout();
-        sys->set_alarm(this, 1000, (void *)4); // 1秒后再次检查
+        sys->set_alarm(this, 1000, (void *)ALARM_DV_TIMEOUT); 
     }
     else if (alarm_type == ALARM_LS)
     {
@@ -238,18 +238,6 @@ void RoutingProtocolImpl::send_dv_update(bool triggered)
 
         delete[] (char *)packet;
     }
-}
-
-void RoutingProtocolImpl::update_route(unsigned short dest, unsigned short next_hop,
-                                       unsigned short port, unsigned int cost)
-{
-    auto &route = routing_table[dest];
-    route.destination = dest;
-    route.next_hop = next_hop;
-    route.port = port;
-    route.cost = cost;
-    route.last_update = sys->time();
-    route.valid = true;
 }
 
 // todo
@@ -717,3 +705,16 @@ void RoutingProtocolImpl::check_neighbor_status()
         }
     }
 }
+
+void RoutingProtocolImpl::update_route(unsigned short dest, unsigned short next_hop,
+                                       unsigned short port, unsigned int cost)
+{
+    auto &route = routing_table[dest];
+    route.destination = dest;
+    route.next_hop = next_hop;
+    route.port = port;
+    route.cost = cost;
+    route.last_update = sys->time();
+    route.valid = true;
+}
+
