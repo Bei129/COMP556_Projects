@@ -121,6 +121,7 @@ void RoutingProtocolImpl::handle_pong(unsigned short port, void *packet)
 
     // 更新链路状态表
     link_state_table[router_id][src_id] = neighbor.cost;
+    ls_last_update[router_id][src_id] = sys->time();
 
     if (!was_alive)
     {
@@ -176,7 +177,7 @@ void RoutingProtocolImpl::handle_alarm(void *data)
     else if (alarm_type == ALARM_LS_TIMEOUT)
     {
         check_link_state_timeout();
-        sys->set_alarm(this, 1000, (void *)ALARM_LS_TIMEOUT); // 1秒后再次检查
+        sys->set_alarm(this, 1000, (void *)6); // 1秒后再次检查
     }
 }
 
@@ -398,7 +399,7 @@ void RoutingProtocolImpl::send_ls_update()
 {
     printf("Router %d: Attempting to send LS update\n", router_id);
 
-    // 统计邻居数量
+    // 统计活动邻居数量
     unsigned short num_neighbors = 0;
     for (const auto &port : ports)
     {
@@ -409,6 +410,12 @@ void RoutingProtocolImpl::send_ls_update()
                 num_neighbors++;
             }
         }
+    }
+
+    if (num_neighbors == 0)
+    {
+        printf("Router %d: No active neighbors, not sending LS update\n", router_id);
+        return;
     }
 
     unsigned short packet_size = sizeof(struct packet) + sizeof(unsigned short) * 1 +
@@ -428,34 +435,18 @@ void RoutingProtocolImpl::send_ls_update()
         {
             if (neighbor.second.isAlive)
             {
-                payload[offset++] = htons(neighbor.first);       // Neighbor ID
-                payload[offset++] = htons(neighbor.second.cost); // Link cost
+                payload[offset++] = htons(neighbor.first); 
+                payload[offset++] = htons(neighbor.second.cost); 
             }
         }
     }
 
-    printf("Router %d: Sending LS update with sequence number %d\n", router_id, sequence_num);
-
     for (unsigned short port = 0; port < num_ports; port++)
     {
-        const auto &port_neighbors = ports[port].neighbors;
-        bool has_active_neighbors = false;
-
-        for (const auto &neighbor : port_neighbors)
-        {
-            if (neighbor.second.isAlive)
-            {
-                has_active_neighbors = true;
-                break;
-            }
-        }
-        if (has_active_neighbors)
-        {
-            char *ls_packet = new char[packet_size];
-            memcpy(ls_packet, packet, packet_size);
-            sys->send(port, ls_packet, packet_size);
-            printf("Router %d: Sent LS update to port %d\n", router_id, port);
-        }
+        char *ls_packet = new char[packet_size];
+        memcpy(ls_packet, packet, packet_size); 
+        sys->send(port, ls_packet, packet_size);
+        printf("Router %d: Broadcasted LS update on port %d\n", router_id, port);
     }
 
     delete[] (char *)packet;
@@ -539,6 +530,7 @@ void RoutingProtocolImpl::handle_ls_packet(unsigned short port, void *packet)
         memcpy(ls_packet, packet, ntohs(pkt->size));
         sys->send(i, ls_packet, ntohs(pkt->size));
         printf("Router %d: Forwarded LS packet to port %d\n", router_id, i);
+        // delete[] (char *)ls_packet;
         // }
     }
 }
@@ -627,35 +619,80 @@ void RoutingProtocolImpl::check_link_state_timeout()
     unsigned int current_time = sys->time();
     bool topology_changed = false;
 
-    for (auto &entry : link_state_table)
-    {
-        unsigned short router_id = entry.first;
-        auto &neighbors = entry.second;
+    // Constants for timeouts
+    static const unsigned int PONG_TIMEOUT = 15000; 
+    static const unsigned int LS_ENTRY_TIMEOUT = 45000; 
 
-        for (auto it = neighbors.begin(); it != neighbors.end();)
+    // Check neighbor timeouts
+    for (unsigned short port = 0; port < num_ports; port++)
+    {
+        auto &port_status = ports[port];
+
+        for (auto it = port_status.neighbors.begin(); it != port_status.neighbors.end();)
         {
             unsigned short neighbor_id = it->first;
+            auto &neighbor = it->second;
 
-            // 检查是否超时
-            if (current_time - ls_last_update[router_id][neighbor_id] > 45000) // 45秒超时
+            if (neighbor.isAlive)
             {
-                printf("Router %d: Link to %d expired\n", router_id, neighbor_id);
-                it = neighbors.erase(it);
-                ls_last_update[router_id].erase(neighbor_id);
+                if (current_time - neighbor.lastPongTime > PONG_TIMEOUT)
+                {
+                    printf("Time %d: Router %d neighbor %d on port %d timed out\n",
+                           current_time, router_id, neighbor_id, port);
+                    neighbor.isAlive = false;
+                    topology_changed = true;
+
+                    link_state_table[router_id].erase(neighbor_id);
+                    ls_last_update[router_id].erase(neighbor_id);
+                }
+            }
+            ++it;
+        }
+    }
+
+    // Check LS entry timeouts
+    for (auto it_router = link_state_table.begin(); it_router != link_state_table.end();)
+    {
+        unsigned short other_router_id = it_router->first;
+        auto &neighbors = it_router->second;
+
+        for (auto it_neighbor = neighbors.begin(); it_neighbor != neighbors.end();)
+        {
+            unsigned short neighbor_id = it_neighbor->first;
+
+            if (current_time - ls_last_update[other_router_id][neighbor_id] > LS_ENTRY_TIMEOUT)
+            {
+                printf("Time %d: Router %d: Link from %d to %d expired\n",
+                       current_time, router_id, other_router_id, neighbor_id);
+                it_neighbor = neighbors.erase(it_neighbor);
+                ls_last_update[other_router_id].erase(neighbor_id);
+
                 topology_changed = true;
             }
             else
             {
-                ++it;
+                ++it_neighbor;
             }
+        }
+
+        if (neighbors.empty())
+        {
+            it_router = link_state_table.erase(it_router);
+            ls_last_update.erase(other_router_id);
+        }
+        else
+        {
+            ++it_router;
         }
     }
 
     if (topology_changed)
     {
         calculate_shortest_paths();
+        send_ls_update();
     }
 }
+
 
 unsigned short RoutingProtocolImpl::get_port_to_neighbor(unsigned short neighbor_id)
 {
