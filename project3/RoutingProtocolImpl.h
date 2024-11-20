@@ -91,12 +91,17 @@ private:
     void check_neighbor_status();
     void print_port_status();
     void *create_packet(unsigned char type, unsigned short size);
+    void handle_data(unsigned short port, void *packet,unsigned short size);
 
     // DV相关方法
-    std::map<unsigned short, RouteEntry> routing_table;
+    std::map<unsigned short, RouteEntry> routing_table; //first-> router_id
     void send_dv_update(bool triggered = false);
     void handle_dv_packet(unsigned short port, void *packet);
     void check_DV_timeout();
+    void delete_DV_invalid();
+    bool port_check();
+
+
     void update_route(unsigned short dest, unsigned short next_hop,
                       unsigned short port, unsigned int cost);
 

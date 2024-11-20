@@ -26,7 +26,6 @@ void RoutingProtocolImpl::init(unsigned short num_ports, unsigned short router_i
     this->router_id = router_id;
     this->protocol_type = protocol_type;
 
-
     ports.resize(num_ports);
     link_state_table[router_id] = {};
     ls_sequence_number[router_id] = 0;
@@ -107,34 +106,33 @@ void RoutingProtocolImpl::handle_pong(unsigned short port, void *packet)
     // 计算RTT
     unsigned int send_time = ntohl(*timestamp);
     unsigned int rtt = sys->time() - send_time;
+    if (rtt > 65535)
+        rtt = 65535;
 
     // 获取或创建邻居信息
     auto &neighbor = ports[port].neighbors[src_id];
     bool was_alive = neighbor.isAlive;
+    unsigned int old_rtt = neighbor.cost;
 
-    // 更新邻居信息
-    if (rtt > 65535) // 防止溢出
-        rtt = 65535;
     neighbor.cost = (unsigned short)rtt;
     neighbor.lastPongTime = sys->time();
     neighbor.isAlive = true;
-
-    // 更新链路状态表
-    link_state_table[router_id][src_id] = neighbor.cost;
 
     if (!was_alive)
     {
         printf("Time %d: Router %d Port %d connected to Router %d, RTT=%dms\n",
                sys->time(), router_id, port, src_id, rtt);
     }
-    // 触发LS和DV更新
     if (protocol_type == P_DV)
     {
         printf("Router %d: Topology changed, sending DV update\n", router_id);
+        bool update_flag = 0;
+        // todo 处理
         send_dv_update(true);
     }
     else if (protocol_type == P_LS)
     {
+        link_state_table[router_id][src_id] = neighbor.cost;
         printf("Router %d: Topology changed, sending LS update\n", router_id);
         send_ls_update();
     }
@@ -154,19 +152,19 @@ void RoutingProtocolImpl::handle_alarm(void *data)
         sys->set_alarm(this, 10000, (void *)1);
     }
     else if (alarm_type == ALARM_CHECK)
-    { 
-      // check_neighbor_status();
-      // sys->set_alarm(this, 1000, (void *)2);
+    {
+        // check_neighbor_status();
+        // sys->set_alarm(this, 1000, (void *)2);
     }
     else if (alarm_type == ALARM_DV)
     {
         send_dv_update(false);
-        sys->set_alarm(this, 30000, (void *)ALARM_DV); 
+        sys->set_alarm(this, 30000, (void *)ALARM_DV);
     }
     else if (alarm_type == ALARM_DV_TIMEOUT)
     {
         check_DV_timeout();
-        sys->set_alarm(this, 1000, (void *)ALARM_DV_TIMEOUT); 
+        sys->set_alarm(this, 1000, (void *)ALARM_DV_TIMEOUT);
     }
     else if (alarm_type == ALARM_LS)
     {
@@ -180,6 +178,7 @@ void RoutingProtocolImpl::handle_alarm(void *data)
     }
 }
 
+// done
 void RoutingProtocolImpl::send_dv_update(bool triggered)
 {
     unsigned short num_routes = routing_table.size();
@@ -200,7 +199,6 @@ void RoutingProtocolImpl::send_dv_update(bool triggered)
                 break;
             }
         }
-
         if (!has_active_neighbors)
         {
             continue;
@@ -215,9 +213,11 @@ void RoutingProtocolImpl::send_dv_update(bool triggered)
             if (!route.second.valid)
                 continue;
 
-            // 改成多个邻居
             unsigned short cost = route.second.cost;
-            if (route.second.port == port)
+
+            unsigned short next_nop = route.second.next_hop;
+            // 目标路由的下一跳是当前port邻居，执行反向毒化
+            if (port_neighbors.find(next_nop) != port_neighbors.end())
             {
                 cost = INFINITY_COST;
             }
@@ -225,18 +225,17 @@ void RoutingProtocolImpl::send_dv_update(bool triggered)
             payload[entry_index++] = htons(route.first); // destination
             payload[entry_index++] = htons(cost);        // cost
         }
+        sys->send(port, packet, packet_size);
 
-        for (const auto &neighbor_pair : port_neighbors)
-        {
-            if (neighbor_pair.second.isAlive)
-            {
-                char *dv_packet = new char[packet_size];
-                memcpy(dv_packet, packet, packet_size);
-                sys->send(port, dv_packet, packet_size);
-            }
-        }
-
-        delete[] (char *)packet;
+        // for (const auto &neighbor_pair : port_neighbors)
+        // {
+        //     if (neighbor_pair.second.isAlive)
+        //     {
+        //         char *dv_packet = new char[packet_size];
+        //         memcpy(dv_packet, packet, packet_size);
+        //          sys->send(port, dv_packet, packet_size);
+        //     }
+        // }
     }
 }
 
@@ -246,15 +245,14 @@ void RoutingProtocolImpl::handle_dv_packet(unsigned short port, void *packet)
     struct packet *pkt = (struct packet *)packet;
     unsigned short src_id = ntohs(pkt->src);
     unsigned short *payload = (unsigned short *)((char *)packet + sizeof(struct packet));
-    // int num_entries = (pkt->size - sizeof(struct packet)) / (sizeof(unsigned short) * 2);
     int num_entries = (ntohs(pkt->size) - sizeof(struct packet)) / (sizeof(unsigned short) * 2);
+    if (num_entries == 0)
+        return;
 
     auto &port_neighbors = ports[port].neighbors;
     auto neighbor_it = port_neighbors.find(src_id);
     if (neighbor_it == port_neighbors.end() || !neighbor_it->second.isAlive)
-    {
         return;
-    }
 
     bool route_changed = false;
 
@@ -263,23 +261,54 @@ void RoutingProtocolImpl::handle_dv_packet(unsigned short port, void *packet)
         unsigned short dest = ntohs(payload[i * 2]);
         unsigned int cost = ntohs(payload[i * 2 + 1]);
 
-        if (cost == INFINITY_COST)
+        if (dest == this->router_id)
             continue;
 
-        // 使用从邻居信息中获取的cost
         unsigned int total_cost = cost + neighbor_it->second.cost;
 
         auto it = routing_table.find(dest);
         if (it == routing_table.end() || !it->second.valid)
         {
+            // new: inserted
             if (total_cost < INFINITY_COST)
             {
                 update_route(dest, src_id, port, total_cost);
                 route_changed = true;
             }
+            continue;
         }
-        else if (it->second.next_hop == src_id)
+        if (cost == INFINITY_COST)
         {
+            // 反向毒化对应处理
+            bool is_neighbor = 0;
+            unsigned int neighbor_cost;
+            unsigned short neighbor_port;
+
+            for (unsigned short tport = 0; tport < num_ports; tport++)
+            {
+                auto &port_status = ports[tport];
+                for (auto nit : port_neighbors)
+                    if (nit.first == dest && nit.second.isAlive)
+                    {
+                        is_neighbor = 1;
+                        neighbor_cost = nit.second.cost;
+                        neighbor_port = tport;
+                    }
+            }
+
+            if (is_neighbor)
+                update_route(dest, dest, neighbor_port, neighbor_cost);
+            else
+                // todo
+                delete_DV_invalid(dest);
+
+            route_changed = 1;
+            continue;
+        }
+
+        if (it->second.next_hop == src_id)
+        {
+            // existed: update
             if (total_cost != it->second.cost)
             {
                 update_route(dest, src_id, port, total_cost);
@@ -297,28 +326,42 @@ void RoutingProtocolImpl::handle_dv_packet(unsigned short port, void *packet)
     {
         send_dv_update(true);
     }
+    delete[] (char *)packet;
 }
 
-//todo
+// todo
 void RoutingProtocolImpl::check_DV_timeout()
 {
     bool route_changed = false;
     unsigned int current_time = sys->time();
 
-    for (auto &route : routing_table)
+    for (unsigned short port = 0; port < num_ports; port++)
     {
-        if (route.second.valid &&
-            current_time - route.second.last_update > 45000)
-        { // 45秒超时
-            route.second.valid = false;
-            route_changed = true;
+        auto &port_status = ports[port];
+        // 遍历端口上的所有邻居
+        for (auto it = port_status.neighbors.begin(); it != port_status.neighbors.end();)
+        {
+            if (it->second.isAlive &&
+                current_time - it->second.lastPongTime > PONG_TIMEOUT)
+            { // 超时移除
+                it->second.isAlive = false;
+                it->second.cost = 0;
+                route_changed = true;
+                if (routing_table.find(it->first) != routing_table.end())
+                {
+                }
+                delete_DV_invalid();
+            }
+        }
+
+        if (route_changed)
+        {
+            send_dv_update(true);
         }
     }
-
-    if (route_changed)
-    {
-        send_dv_update(true);
-    }
+}
+void delete_DV_invalid()
+{
 }
 
 void RoutingProtocolImpl::recv(unsigned short port, void *packet, unsigned short size)
@@ -373,7 +416,8 @@ void RoutingProtocolImpl::recv(unsigned short port, void *packet, unsigned short
     case LS:
         handle_ls_packet(port, packet);
         break;
-    // 缺少DATA
+    case DATA:
+        handle_data(port,packet,size);
     default:
         printf("Unknown packet type received: %d\n", pkt_type);
         break;
@@ -381,7 +425,27 @@ void RoutingProtocolImpl::recv(unsigned short port, void *packet, unsigned short
 
     // delete[] (char *)packet;
 }
-
+void RoutingProtocolImpl::handle_data(unsigned short port, void *packet,unsigned short size){
+    struct packet *header = (struct packet *)packet;
+    if (header->dst == router_id)
+    {
+        free(packet);
+        return;
+    }
+    else
+    {
+        auto it = routing_table.find(header->dst);
+        if (it != routing_table.end() && it->second.valid)
+        {
+            unsigned short next_port = it->second.port;
+            sys->send(next_port, packet, size);
+        }
+        else
+        {
+            printf("Destination %d unreachable from Router %d\n", header->dst, router_id);
+        }
+    }
+}
 void RoutingProtocolImpl::send_ls_update()
 {
     printf("Router %d: Attempting to send LS update\n", router_id);
@@ -693,12 +757,12 @@ void RoutingProtocolImpl::check_neighbor_status()
 
     if (topology_changed)
     {
-        if (protocol_type == P_DV)
-        {
-            printf("Router %d: Topology changed, sending DV update\n", router_id);
-            send_dv_update(true);
-        }
-        else if (protocol_type == P_LS)
+        // if (protocol_type == P_DV)
+        // {
+        //     printf("Router %d: Topology changed, sending DV update\n", router_id);
+        //     send_dv_update(true);
+        // }
+        if (protocol_type == P_LS)
         {
             printf("Router %d: Topology changed, sending LS update\n", router_id);
             send_ls_update();
@@ -717,4 +781,3 @@ void RoutingProtocolImpl::update_route(unsigned short dest, unsigned short next_
     route.last_update = sys->time();
     route.valid = true;
 }
-
