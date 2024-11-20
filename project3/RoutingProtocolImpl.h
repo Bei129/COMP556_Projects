@@ -71,6 +71,8 @@ private:
     // Alarm类型常量
     static const int ALARM_PING = 1;
     static const int ALARM_CHECK = 2;
+    static const int ALARM_DV = 3;
+    static const int ALARM_DV_TIMEOUT = 4;
     static const int ALARM_LS = 5;
     static const int ALARM_LS_TIMEOUT = 6;
 
@@ -94,7 +96,7 @@ private:
     std::map<unsigned short, RouteEntry> routing_table;
     void send_dv_update(bool triggered = false);
     void handle_dv_packet(unsigned short port, void *packet);
-    void check_routes_timeout();
+    void check_DV_timeout();
     void update_route(unsigned short dest, unsigned short next_hop,
                       unsigned short port, unsigned int cost);
 
