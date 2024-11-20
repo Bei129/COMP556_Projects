@@ -57,6 +57,8 @@ private:
     unsigned short router_id;
     unsigned short num_ports;
     std::vector<PortStatus> ports; // 数据结构不变，内容变了
+    eProtocolType protocol_type; // 保存协议类型
+    
 
     // 包大小相关常量 这里是12
     static const unsigned short PING_PONG_PACK_SIZE = sizeof(struct packet) + sizeof(unsigned int);

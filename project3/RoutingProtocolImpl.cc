@@ -24,6 +24,7 @@ void RoutingProtocolImpl::init(unsigned short num_ports, unsigned short router_i
 
     this->num_ports = num_ports;
     this->router_id = router_id;
+    this->protocol_type = protocol_type;
 
     // 初始化端口数组
     ports.resize(num_ports);
@@ -33,7 +34,7 @@ void RoutingProtocolImpl::init(unsigned short num_ports, unsigned short router_i
     ls_sequence_number[router_id] = 0; 
 
     sys->set_alarm(this, 0, (void *)ALARM_PING);
-    sys->set_alarm(this, CHECK_DURATION, (void *)ALARM_CHECK);
+    // sys->set_alarm(this, CHECK_DURATION, (void *)ALARM_CHECK);
 
     if (protocol_type == P_DV) {
         // DV
@@ -130,8 +131,16 @@ void RoutingProtocolImpl::handle_pong(unsigned short port, void *packet)
     }
 
     // 触发LS和DV更新
-    send_ls_update();
-    send_dv_update(true);
+    if (protocol_type == P_DV)
+    {
+        printf("Router %d: Topology changed, sending DV update\n", router_id);
+        send_dv_update(true);
+    } 
+    else if (protocol_type == P_LS)
+    {
+        printf("Router %d: Topology changed, sending LS update\n", router_id);
+        send_ls_update();
+    }
 }
 
 void RoutingProtocolImpl::check_neighbor_status()
@@ -168,8 +177,16 @@ void RoutingProtocolImpl::check_neighbor_status()
 
     if (topology_changed)
     {
-        send_ls_update();
-        send_dv_update(true);
+        if (protocol_type == P_DV)
+        {
+            printf("Router %d: Topology changed, sending DV update\n", router_id);
+            send_dv_update(true);
+        } 
+        else if (protocol_type == P_LS)
+        {
+            printf("Router %d: Topology changed, sending LS update\n", router_id);
+            send_ls_update();
+        }
     }
 }
 
