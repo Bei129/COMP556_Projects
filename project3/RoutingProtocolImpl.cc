@@ -290,24 +290,42 @@ void RoutingProtocolImpl::send_dv_update(bool triggered)
     }
 }
 
-// todo
+// done
 void RoutingProtocolImpl::handle_dv_packet(unsigned short port, void *packet)
 {
     struct packet *pkt = (struct packet *)packet;
     unsigned short src_id = ntohs(pkt->src);
     unsigned short *payload = (unsigned short *)((char *)packet + sizeof(struct packet));
     int num_entries = (ntohs(pkt->size) - sizeof(struct packet)) / (sizeof(unsigned short) * 2);
-    if (num_entries == 0)
-        return;
-
     auto &port_neighbors = ports[port].neighbors;
     auto neighbor_it = port_neighbors.find(src_id);
-    if (neighbor_it == port_neighbors.end() || !neighbor_it->second.isAlive)
+    if (!num_entries || neighbor_it == port_neighbors.end() || !neighbor_it->second.isAlive)
+    {
+        delete[] (char *)packet;
         return;
+    }
+
+    unordered_map<unsigned short, unsigned short> DV_table;
+    for (int i = 0; i < num_entries; i++)
+    {
+        unsigned short dest = ntohs(payload[i * 2]);
+        unsigned int cost = ntohs(payload[i * 2 + 1]);
+        DV_table[dest] = cost;
+    }
 
     bool route_changed = false;
 
-    //update src_id
+    // update src_id
+    if (routing_table.find(src_id) != routing_table.end())
+    {
+        auto &route_src = routing_table[src_id];
+        unsigned short new_cost = DV_table[this->router_id];
+        if (route_src.cost > new_cost && route_src.next_hop != src_id)
+        {
+            update_route(src_id, src_id, port, new_cost);
+            route_changed = true;
+        }
+    }
 
     for (int i = 0; i < num_entries; i++)
     {
@@ -320,9 +338,9 @@ void RoutingProtocolImpl::handle_dv_packet(unsigned short port, void *packet)
         unsigned int total_cost = cost + neighbor_it->second.cost;
 
         auto it = routing_table.find(dest);
+        // new: inserted
         if (it == routing_table.end() || !it->second.valid)
         {
-            // new: inserted
             if (total_cost < INFINITY_COST)
             {
                 update_route(dest, src_id, port, total_cost);
@@ -340,28 +358,27 @@ void RoutingProtocolImpl::handle_dv_packet(unsigned short port, void *packet)
             for (unsigned short tport = 0; tport < num_ports; tport++)
             {
                 auto &port_status = ports[tport];
-                for (auto nit = port_status.neighbors.begin(); nit != port_status.neighbors.end();)
-                    if (nit->first == dest && nit->second.isAlive)
-                    {
-                        is_neighbor = 1;
-                        neighbor_cost = nit->second.cost;
-                        neighbor_port = tport;
-                    }
+                auto neighbor_it = port_status.neighbors.find(dest);
+                if (neighbor_it != port_status.neighbors.end() && neighbor_it->second.isAlive)
+                {
+                    is_neighbor = true;
+                    neighbor_cost = neighbor_it->second.cost;
+                    neighbor_port = tport;
+                    break;
+                }
             }
 
             if (is_neighbor)
                 update_route(dest, dest, neighbor_port, neighbor_cost);
             else
-                // todo
-                delete_DV_invalid(dest);
-
+                routing_table.erase(dest);
             route_changed = 1;
             continue;
         }
-
+        // existed: update
         if (it->second.next_hop == src_id)
         {
-            // existed: update
+
             if (total_cost != it->second.cost)
             {
                 update_route(dest, src_id, port, total_cost);
@@ -382,40 +399,89 @@ void RoutingProtocolImpl::handle_dv_packet(unsigned short port, void *packet)
     delete[] (char *)packet;
 }
 
-// todo
+// done
 void RoutingProtocolImpl::check_DV_timeout()
 {
     bool route_changed = false;
-    unsigned int current_time = sys->time();
+    // unsigned int current_time = sys->time();
+    vector<unsigned short> invalid_neighbor;
 
     for (unsigned short port = 0; port < num_ports; port++)
     {
         auto &port_status = ports[port];
-        // 遍历端口上的所有邻居
-        for (auto it = port_status.neighbors.begin(); it != port_status.neighbors.end();)
+        for (auto &it : port_status.neighbors)
         {
-            if (it->second.isAlive &&
-                current_time - it->second.lastPongTime > PONG_TIMEOUT)
+            if (it.second.isAlive &&
+                sys->time() - it.second.lastPongTime > PONG_TIMEOUT)
             { // 超时移除
-                it->second.isAlive = false;
-                it->second.cost = 0;
+                it.second.isAlive = false;
+                it.second.cost = 0;
                 route_changed = true;
-                if (routing_table.find(it->first) != routing_table.end())
-                {
-                }
-                delete_DV_invalid();
+                delete_DV_invalid(it.first);
             }
         }
-
-        if (route_changed)
-        {
-            send_dv_update(true);
-        }
+    }
+    if (route_changed)
+    {
+        send_dv_update(true);
     }
 }
 
-void delete_DV_invalid()
+// return port or 0
+unsigned short RoutingProtocolImpl::find_neighbor(unsigned short id)
 {
+    for (unsigned short port = 0; port < num_ports; port++)
+    {
+        auto &port_neighbor = ports[port].neighbors;
+        auto neighbor_it = port_neighbor.find(id);
+        if (neighbor_it != port_neighbor.end())
+        {
+            if (neighbor_it->second.isAlive)
+                return port;
+            else
+                return -1;
+        }
+    }
+    return -1;
+}
+
+void RoutingProtocolImpl::delete_DV_invalid(unsigned short invalid_id)
+{
+    vector<unsigned short> to_delete;
+    for (auto &it : routing_table)
+    {
+        if (sys->time() - it.second.last_update >= ROUTE_TIMEOUT)
+        {
+            to_delete.emplace_back(it.first);
+            continue;
+        }
+        if (it.second.next_hop == invalid_id)
+        {
+            unsigned short find_port = find_neighbor(it.first);
+            if (find_port == -1)
+                to_delete.emplace_back(it.first);
+            else
+            {
+                auto &pit = ports[find_port].neighbors;
+                auto neighbor_it = pit.find(it.first);
+                if (neighbor_it != pit.end() && neighbor_it->second.cost != it.second.cost)
+                {
+                    update_route(it.first, it.first, find_port, neighbor_it->second.cost);
+                }
+                // auto &pit = ports[find_port].neighbors;
+                // if (pit[it.first].cost != it.second.cost)
+                // {
+                //     update_route(it.first, it.first, find_port, pit[it.first].cost);
+                // }
+            }
+        }
+    }
+
+    for (auto it : to_delete)
+    {
+        if (routing_table.find(it) != routing_table.end())
+            routing_table.erase(it);
+    }
 }
 
 void RoutingProtocolImpl::recv(unsigned short port, void *packet, unsigned short size)

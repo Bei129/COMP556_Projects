@@ -67,6 +67,7 @@ private:
     static const unsigned int PONG_TIMEOUT = 15000;  // 15s neighbor timeout
     static const unsigned int PING_DURATION = 10000; // 10s ping interval
     static const unsigned int CHECK_DURATION = 1000; // 1s check interval
+    static const unsigned int ROUTE_TIMEOUT = 45000; // 45s routing timeout
 
     // Alarm类型常量
     static const int ALARM_PING = 1;
@@ -98,9 +99,8 @@ private:
     void send_dv_update(bool triggered = false);
     void handle_dv_packet(unsigned short port, void *packet);
     void check_DV_timeout();
-    void delete_DV_invalid();
-    bool port_check();
-
+    unsigned short find_neighbor(unsigned short id);
+    void delete_DV_invalid(unsigned short invalid_id);
 
     void update_route(unsigned short dest, unsigned short next_hop,
                       unsigned short port, unsigned int cost);
