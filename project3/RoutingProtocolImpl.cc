@@ -113,6 +113,9 @@ void RoutingProtocolImpl::handle_pong(unsigned short port, void *packet)
     auto &neighbor = ports[port].neighbors[src_id];
     bool was_alive = neighbor.isAlive;
     //printf("test:was_alive:%d\n", was_alive);
+    if(!was_alive){
+        printf("Pong: Router %d was_dead before\n", router_id);
+    }
     bool need_update = false;
     unsigned int old_rtt = neighbor.cost;
 
@@ -124,7 +127,7 @@ void RoutingProtocolImpl::handle_pong(unsigned short port, void *packet)
     link_state_table[router_id][src_id] = neighbor.cost;
     ls_last_update[router_id][src_id] = sys->time();
 
-    if (!was_alive)
+    if (!was_alive || old_rtt!=rtt)
     {
         need_update = true;
         printf("Time %d: Router %d Port %d connected to Router %d, RTT=%dms\n",
@@ -502,21 +505,13 @@ void RoutingProtocolImpl::recv(unsigned short port, void *packet, unsigned short
     unsigned short pkt_src = ntohs(header->src);
     unsigned short pkt_dst = ntohs(header->dst);
 
-    printf("Router %d: Received packet of type %d from %d to %d on port %d\n", router_id, pkt_type, pkt_src, pkt_dst, port);
-
-    // 验证包的大小
+    printf("Router %d:%d: Received %d packet %d -> %d\n", router_id, port, pkt_type, pkt_src, pkt_dst);
     if (pkt_size != size)
     {
         printf("Packet size mismatch: expected %u, got %u\n", pkt_size, size);
-        // delete[] (char *)packet;
         return;
     }
-    // else
-    // {
-    //     printf("Packet size is correct: expected %u, got %u\n", pkt_size, size);
-    // }
 
-    // switch (header->type)
     switch (pkt_type)
     {
     case PING:
