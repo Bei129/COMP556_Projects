@@ -134,9 +134,9 @@ void RoutingProtocolImpl::handle_pong(unsigned short port, void *packet)
         printf("Time %d: Router %d Port %d connected to Router %d, RTT=%dms\n",
                sys->time(), router_id, port, src_id, rtt);
     }
+
     // 触发LS和DV更新
-    if (need_update)
-    {
+    if (need_update) {
         if (protocol_type == P_DV)
         {
             printf("Router %d: Topology changed, sending DV update\n", router_id);
@@ -237,7 +237,7 @@ void RoutingProtocolImpl::handle_alarm(void *data)
     }
 }
 
-
+// done
 void RoutingProtocolImpl::send_dv_update(bool triggered)
 {
     unsigned short num_routes = routing_table.size();
@@ -460,7 +460,7 @@ void RoutingProtocolImpl::check_DV_timeout()
         cout<<"1s checking"<<endl;
         print_DV_routing_table();
     }
-    
+
 }
 
 // return port or INVALID_PORT
@@ -500,7 +500,7 @@ void RoutingProtocolImpl::delete_DV_invalid(unsigned short invalid_id)
             if (find_port == INVALID_PORT){
                 cout<<"Not Neighbor:"<<it.first<<endl;
                 to_delete.emplace_back(it.first);
-            }   
+            }
             else
             {
                 auto &pit = ports[find_port].neighbors;
@@ -509,9 +509,15 @@ void RoutingProtocolImpl::delete_DV_invalid(unsigned short invalid_id)
                 {
                     update_route(it.first, it.first, find_port, neighbor_it->second.cost);
                 }
+                // auto &pit = ports[find_port].neighbors;
+                // if (pit[it.first].cost != it.second.cost)
+                // {
+                //     update_route(it.first, it.first, find_port, pit[it.first].cost);
+                // }
             }
         }
     }
+
     for (auto it : to_delete)
     {
         cout<<it<<endl;
@@ -809,6 +815,17 @@ void RoutingProtocolImpl::calculate_shortest_paths()
             }
         }
     }
+
+     // 处理过期路由
+    for (auto &entry : routing_table)
+    {
+        unsigned short dest = entry.first;
+        if (distance.find(dest) == distance.end())
+        {
+            entry.second.valid = false;
+            printf("Router %d: Destination %d no longer reachable, invalidating route\n", router_id, dest);
+        }
+    }
 }
 
 void RoutingProtocolImpl::check_link_state_timeout()
@@ -890,6 +907,7 @@ void RoutingProtocolImpl::check_link_state_timeout()
     }
 }
 
+
 unsigned short RoutingProtocolImpl::get_port_to_neighbor(unsigned short neighbor_id)
 {
     for (unsigned short port = 0; port < num_ports; port++)
@@ -938,6 +956,11 @@ void RoutingProtocolImpl::check_neighbor_status()
 
     if (topology_changed)
     {
+        // if (protocol_type == P_DV)
+        // {
+        //     printf("Router %d: Topology changed, sending DV update\n", router_id);
+        //     send_dv_update(true);
+        // }
         if (protocol_type == P_LS)
         {
             printf("Router %d: Topology changed, sending LS update\n", router_id);
