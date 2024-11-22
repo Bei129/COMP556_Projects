@@ -133,63 +133,63 @@ void RoutingProtocolImpl::handle_pong(unsigned short port, void *packet)
         printf("Time %d: Router %d Port %d connected to Router %d, RTT=%dms\n",
                sys->time(), router_id, port, src_id, rtt);
     }
+    
     // 触发LS和DV更新
-    if (protocol_type == P_DV)
-    {
-        if (need_update)
+    if (need_update) {
+        if (protocol_type == P_DV)
         {
-            printf("Router %d: Topology changed, sending DV update\n", router_id);
-            bool updated = false;
-            if (routing_table.find(src_id) == routing_table.end())
-            {
-                update_route(src_id, src_id, port, rtt);
-                updated = true;
-            }
-            else
-            {
-                auto &route_entry = routing_table[src_id];
-                if (route_entry.next_hop == src_id || rtt < route_entry.cost)
+                printf("Router %d: Topology changed, sending DV update\n", router_id);
+                bool updated = false;
+                if (routing_table.find(src_id) == routing_table.end())
                 {
-                    // 直连，或者新 RTT 更优
-                    route_entry.cost = rtt;
-                    route_entry.next_hop = src_id;
-                    route_entry.last_update = sys->time();
+                    update_route(src_id, src_id, port, rtt);
                     updated = true;
                 }
-            }
-
-            if (updated)
-            {
-                // path update
-                unsigned int current_time = sys->time();
-                unsigned short diff = rtt - old_rtt;
-                for (auto &it : routing_table)
+                else
                 {
-                    if (it.second.next_hop == src_id)
+                    auto &route_entry = routing_table[src_id];
+                    if (route_entry.next_hop == src_id || rtt < route_entry.cost)
                     {
-                        it.second.cost += diff;
-                        it.second.last_update = current_time;
-                    }
-                    // better cost with direct neighbor:update
-                    for (unsigned short tport = 0; tport < num_ports; tport++)
-                    {
-                        auto &port_status = ports[tport];
-                        for (auto &pit : port_status.neighbors)
-                            if (pit.first == it.first && pit.second.isAlive && pit.second.cost < it.second.cost)
-                            {
-                                update_route(it.first, it.first, tport, pit.second.cost);
-                            }
+                        // 直连，或者新 RTT 更优
+                        route_entry.cost = rtt;
+                        route_entry.next_hop = src_id;
+                        route_entry.last_update = sys->time();
+                        updated = true;
                     }
                 }
-            }
-            send_dv_update(need_update);
+
+                if (updated)
+                {
+                    // path update
+                    unsigned int current_time = sys->time();
+                    unsigned short diff = rtt - old_rtt;
+                    for (auto &it : routing_table)
+                    {
+                        if (it.second.next_hop == src_id)
+                        {
+                            it.second.cost += diff;
+                            it.second.last_update = current_time;
+                        }
+                        // better cost with direct neighbor:update
+                        for (unsigned short tport = 0; tport < num_ports; tport++)
+                        {
+                            auto &port_status = ports[tport];
+                            for (auto &pit : port_status.neighbors)
+                                if (pit.first == it.first && pit.second.isAlive && pit.second.cost < it.second.cost)
+                                {
+                                    update_route(it.first, it.first, tport, pit.second.cost);
+                                }
+                        }
+                    }
+                }
+                send_dv_update(need_update);
         }
-    }
-    else if (protocol_type == P_LS)
-    {
-        printf("Router %d: Topology changed, sending LS update\n", router_id);
-        send_ls_update();
-    }
+        else if (protocol_type == P_LS)
+        {
+            printf("Router %d: Topology changed, sending LS update\n", router_id);
+            send_ls_update();
+        }
+    } 
 }
 
 void RoutingProtocolImpl::handle_alarm(void *data)
