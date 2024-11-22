@@ -135,9 +135,9 @@ void RoutingProtocolImpl::handle_pong(unsigned short port, void *packet)
                sys->time(), router_id, port, src_id, rtt);
     }
     // 触发LS和DV更新
-    if (protocol_type == P_DV)
+    if (need_update)
     {
-        if (need_update)
+        if (protocol_type == P_DV)
         {
             printf("Router %d: Topology changed, sending DV update\n", router_id);
             bool updated = false;
@@ -186,11 +186,11 @@ void RoutingProtocolImpl::handle_pong(unsigned short port, void *packet)
             // trigger
             send_dv_update(need_update);
         }
-    }
-    else if (protocol_type == P_LS)
-    {
-        printf("Router %d: Topology changed, sending LS update\n", router_id);
-        send_ls_update();
+        else if (protocol_type == P_LS)
+        {
+            printf("Router %d: Topology changed, sending LS update\n", router_id);
+            send_ls_update();
+        }
     }
 }
 
@@ -324,7 +324,7 @@ void RoutingProtocolImpl::handle_dv_packet(unsigned short port, void *packet)
         neighbor.lastPongTime = sys->time();
         neighbor.isAlive = true;
     }
-
+    bool route_changed = false;
     // update src_id
     if (routing_table.find(src_id) != routing_table.end())
     {
@@ -336,8 +336,6 @@ void RoutingProtocolImpl::handle_dv_packet(unsigned short port, void *packet)
             route_changed = true;
         }
     }
-
-    bool route_changed = false;
 
     for (int i = 0; i < num_entries; i++)
     {
@@ -370,11 +368,19 @@ void RoutingProtocolImpl::handle_dv_packet(unsigned short port, void *packet)
                 }
             }
 
+            if (it == routing_table.end() || it->second.next_hop != src_id)
+                continue;
+
             if (is_neighbor)
+            {
                 update_route(dest, dest, neighbor_port, neighbor_cost);
+                route_changed = 1;
+            }
             else
+            {
                 routing_table.erase(dest);
-            route_changed = 1;
+                route_changed = 1;
+            }
             continue;
         }
 
