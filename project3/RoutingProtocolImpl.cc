@@ -96,7 +96,7 @@ void RoutingProtocolImpl::handle_ping(unsigned short port, void *packet)
     // delete[] pong_packet;
 }
 
-// done
+
 void RoutingProtocolImpl::handle_pong(unsigned short port, void *packet)
 {
     struct packet *header = (struct packet *)packet;
@@ -184,6 +184,8 @@ void RoutingProtocolImpl::handle_pong(unsigned short port, void *packet)
                 }
             }
             // trigger
+            cout<<"Handling Pong"<<endl;
+            print_DV_routing_table();
             send_dv_update(need_update);
         }
         else if (protocol_type == P_LS)
@@ -235,7 +237,7 @@ void RoutingProtocolImpl::handle_alarm(void *data)
     }
 }
 
-// done
+
 void RoutingProtocolImpl::send_dv_update(bool triggered)
 {
     unsigned short num_routes = routing_table.size();
@@ -247,7 +249,8 @@ void RoutingProtocolImpl::send_dv_update(bool triggered)
         const auto &port_neighbors = ports[port].neighbors;
 
         // Send DV Routing table to neighbor with poison reversion
-        bool has_active_neighbors = false;
+
+        // bool has_active_neighbors = false;
         for (const std::pair<unsigned short, NeighborInfo> &pair : port_neighbors)
         {
             if (!pair.second.isAlive)
@@ -269,7 +272,7 @@ void RoutingProtocolImpl::send_dv_update(bool triggered)
                 unsigned short cost = route.second.cost;
 
                 unsigned short next_nop = route.second.next_hop;
-                if (port_neighbors.find(next_nop) != port_neighbors.end())
+                if (pair.first == next_nop)
                 {
                     cost = INFINITY_COST;
                 }
@@ -282,7 +285,15 @@ void RoutingProtocolImpl::send_dv_update(bool triggered)
     }
 }
 
-// done
+void RoutingProtocolImpl::print_DV_routing_table(){
+    printf("---------------Router:%d-----------------\n",router_id);
+    for(auto it:routing_table){
+        printf("dst:%d  nxt:%d cost:%d\n",int(it.second.destination),int(it.second.next_hop),int(it.second.cost));
+    }
+    printf("---------------------------------------\n");
+}
+
+
 void RoutingProtocolImpl::handle_dv_packet(unsigned short port, void *packet)
 {
     struct packet *pkt = (struct packet *)packet;
@@ -297,6 +308,7 @@ void RoutingProtocolImpl::handle_dv_packet(unsigned short port, void *packet)
 
     if (!num_entries || dst_id != router_id)
     {
+        printf("Router %d: Wrong DV packet from %d\n", router_id, src_id);
         delete[] (char *)packet;
         return;
     }
@@ -326,65 +338,64 @@ void RoutingProtocolImpl::handle_dv_packet(unsigned short port, void *packet)
     }
     bool route_changed = false;
     // update src_id
-    if (routing_table.find(src_id) != routing_table.end())
-    {
-        auto &route_src = routing_table[src_id];
-        unsigned short new_cost = DV_table[this->router_id];
-        if (route_src.cost > new_cost && route_src.next_hop != src_id)
-        {
-            update_route(src_id, src_id, port, new_cost);
-            route_changed = true;
-        }
-    }
+    update_route(src_id, src_id, port, DV_table[this->router_id]);
+    // if (routing_table.find(src_id) != routing_table.end())
+    // {
+    //     routing_table[src_id].last_update = sys->time();
+    //     auto &route_src = routing_table[src_id];
+    //     unsigned short new_cost = DV_table[this->router_id];
+    //     if (route_src.cost > new_cost && route_src.next_hop != src_id)
+    //     {
+    //         update_route(src_id, src_id, port, new_cost);
+    //         route_changed = true;
+    //     }
+    // }
 
     for (int i = 0; i < num_entries; i++)
     {
         unsigned short dest = ntohs(payload[i * 2]);
         unsigned int cost = ntohs(payload[i * 2 + 1]);
 
-        // if (dest == this->router_id)
-        //     continue;
-
-        unsigned int total_cost = cost + neighbor_it->second.cost;
+        if (dest == this->router_id)
+            continue;
         auto it = routing_table.find(dest);
 
         if (cost == INFINITY_COST)
         {
             // 反向毒化对应处理
-            bool is_neighbor = 0;
-            unsigned int neighbor_cost;
-            unsigned short neighbor_port;
+            // bool is_neighbor = 0;
+            // unsigned int neighbor_cost;
+            // unsigned short neighbor_port;
 
-            for (unsigned short tport = 0; tport < num_ports; tport++)
-            {
-                auto &port_status = ports[tport];
-                auto neighbor_it = port_status.neighbors.find(dest);
-                if (neighbor_it != port_status.neighbors.end() && neighbor_it->second.isAlive)
-                {
-                    is_neighbor = true;
-                    neighbor_cost = neighbor_it->second.cost;
-                    neighbor_port = tport;
-                    break;
-                }
-            }
+            // for (unsigned short tport = 0; tport < num_ports; tport++)
+            // {
+            //     auto &port_status = ports[tport];
+            //     auto neighbor_it = port_status.neighbors.find(dest);
+            //     if (neighbor_it != port_status.neighbors.end() && neighbor_it->second.isAlive)
+            //     {
+            //         is_neighbor = true;
+            //         neighbor_cost = neighbor_it->second.cost;
+            //         neighbor_port = tport;
+            //         break;
+            //     }
+            // }
 
-            if (it == routing_table.end() || it->second.next_hop != src_id)
-                continue;
+            // if (it == routing_table.end() || it->second.next_hop != src_id)
+            //     continue;
 
-            if (is_neighbor)
-            {
-                update_route(dest, dest, neighbor_port, neighbor_cost);
-                route_changed = 1;
-            }
-            else
-            {
-                routing_table.erase(dest);
-                route_changed = 1;
-            }
+            // if (is_neighbor)
+            // {
+            //     update_route(dest, dest, neighbor_port, neighbor_cost);
+            //     route_changed = 1;
+            // }
+            // else
+            // routing_table.erase(dest);
+            // route_changed = 1;
             continue;
         }
 
-        // new: inserted
+        unsigned int total_cost = cost + neighbor_it->second.cost;
+
         if (it == routing_table.end() || !it->second.valid)
         {
             if (total_cost < INFINITY_COST)
@@ -393,20 +404,17 @@ void RoutingProtocolImpl::handle_dv_packet(unsigned short port, void *packet)
                 route_changed = true;
             }
         }
-        // existed: update
         else
         {
-            // better
-            if (total_cost < it->second.cost)
+            if (total_cost < routing_table[dest].cost ||
+                (routing_table[dest].next_hop == src_id && total_cost != routing_table[dest].cost))
             {
                 update_route(dest, src_id, port, total_cost);
                 route_changed = true;
             }
-            // through neighbor
-            else if (it->second.next_hop == src_id && total_cost != it->second.cost)
+            else if (routing_table[dest].next_hop == src_id && total_cost == routing_table[dest].cost)
             {
-                update_route(dest, src_id, port, total_cost);
-                route_changed = true;
+                routing_table[dest].last_update = sys->time();
             }
         }
     }
@@ -415,6 +423,8 @@ void RoutingProtocolImpl::handle_dv_packet(unsigned short port, void *packet)
     {
         // trigger
         send_dv_update(true);
+        cout<<"Handling DV"<<endl;
+        print_DV_routing_table();
     }
     delete[] (char *)packet;
 }
@@ -437,8 +447,9 @@ void RoutingProtocolImpl::check_DV_timeout()
                 it.second.isAlive = false;
                 it.second.cost = 0;
                 route_changed = true;
-                printf("1s Round Check Update:%d\n", router_id);
-                delete_DV_invalid(it.first);
+                printf("Router %d 1s Round Check: %d timeout\n", router_id,it.first);
+                unsigned short nid=it.first;
+                delete_DV_invalid(nid);
             }
         }
     }
@@ -446,7 +457,10 @@ void RoutingProtocolImpl::check_DV_timeout()
     {
         // trigger
         send_dv_update(true);
+        cout<<"1s checking"<<endl;
+        print_DV_routing_table();
     }
+    
 }
 
 // return port or INVALID_PORT
@@ -469,19 +483,24 @@ unsigned short RoutingProtocolImpl::find_neighbor(unsigned short id)
 
 void RoutingProtocolImpl::delete_DV_invalid(unsigned short invalid_id)
 {
+
     vector<unsigned short> to_delete;
     for (auto &it : routing_table)
     {
         if (sys->time() - it.second.last_update >= ROUTE_TIMEOUT)
         {
             to_delete.emplace_back(it.first);
+            cout<<"Route timeout:"<<it.first<<endl;
+            cout<<"Route timeout:"<<it.second.last_update<<endl;
             continue;
         }
         if (it.second.next_hop == invalid_id)
         {
             unsigned short find_port = find_neighbor(it.first);
-            if (find_port == INVALID_PORT)
+            if (find_port == INVALID_PORT){
+                cout<<"Not Neighbor:"<<it.first<<endl;
                 to_delete.emplace_back(it.first);
+            }   
             else
             {
                 auto &pit = ports[find_port].neighbors;
@@ -493,9 +512,9 @@ void RoutingProtocolImpl::delete_DV_invalid(unsigned short invalid_id)
             }
         }
     }
-
     for (auto it : to_delete)
     {
+        cout<<it<<endl;
         if (routing_table.find(it) != routing_table.end())
             routing_table.erase(it);
     }
@@ -919,11 +938,6 @@ void RoutingProtocolImpl::check_neighbor_status()
 
     if (topology_changed)
     {
-        // if (protocol_type == P_DV)
-        // {
-        //     printf("Router %d: Topology changed, sending DV update\n", router_id);
-        //     send_dv_update(true);
-        // }
         if (protocol_type == P_LS)
         {
             printf("Router %d: Topology changed, sending LS update\n", router_id);

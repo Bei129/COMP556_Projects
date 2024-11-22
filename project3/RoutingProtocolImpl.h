@@ -97,6 +97,7 @@ private:
     // DV相关方法
     std::map<unsigned short, RouteEntry> routing_table; //first-> router_id
     void send_dv_update(bool triggered = false);
+    void print_DV_routing_table();
     void handle_dv_packet(unsigned short port, void *packet);
     void check_DV_timeout();
     unsigned short find_neighbor(unsigned short id);
