@@ -776,6 +776,17 @@ void RoutingProtocolImpl::calculate_shortest_paths()
             }
         }
     }
+
+     // 处理过期路由
+    for (auto &entry : routing_table)
+    {
+        unsigned short dest = entry.first;
+        if (distance.find(dest) == distance.end())
+        {
+            entry.second.valid = false;
+            printf("Router %d: Destination %d no longer reachable, invalidating route\n", router_id, dest);
+        }
+    }
 }
 
 void RoutingProtocolImpl::check_link_state_timeout()
