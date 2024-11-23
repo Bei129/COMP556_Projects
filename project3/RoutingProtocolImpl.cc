@@ -62,6 +62,121 @@ void *RoutingProtocolImpl::create_packet(unsigned char type, unsigned short size
     return packet;
 }
 
+void RoutingProtocolImpl::recv(unsigned short port, void *packet, unsigned short size)
+{
+    // 检查size 是否小于 packet 结构体大小、检查 port 是否有效
+    // if (size < sizeof(struct packet) || port >= num_ports)
+    // {
+    //     // delete[] (char *)packet;
+    //     printf("Error Packet");
+    //     return;
+    // }
+
+    struct packet *header = (struct packet *)packet;
+
+    // 转为主机字节序
+    ePacketType pkt_type = (ePacketType)(*((unsigned char *)packet));
+    unsigned short pkt_size = ntohs(header->size);
+    unsigned short pkt_src = ntohs(header->src);
+    unsigned short pkt_dst = ntohs(header->dst);
+
+    printf("Router %d:%d: Received %d packet %d -> %d\n", router_id, port, pkt_type, pkt_src, pkt_dst);
+    if (pkt_size != size)
+    {
+        printf("Packet size mismatch: expected %u, got %u\n", pkt_size, size);
+        return;
+    }
+
+    switch (pkt_type)
+    {
+        case PING:
+            handle_ping(port, packet);
+            break;
+        case PONG:
+            handle_pong(port, packet);
+            break;
+        case DV:
+            handle_dv_packet(port, packet);
+            break;
+        case LS:
+            handle_ls_packet(port, packet);
+            break;
+        case DATA:
+            handle_data(port, packet, size);
+            break;
+        default:
+            printf("Unknown packet type received: %d\n", pkt_type);
+            break;
+    }
+
+    // delete[] (char *)packet;
+}
+
+void RoutingProtocolImpl::handle_data(unsigned short port, void *packet, unsigned short size)
+{
+    struct packet *header = (struct packet *)packet;
+    unsigned short dst = ntohs(header->dst);
+    if (dst == router_id)
+    {
+        // printf("Own Packet:%d",router_id);
+        free(packet);
+        return;
+    }
+
+    auto it = routing_table.find(dst);
+    if (it != routing_table.end() && it->second.valid)
+    {
+        unsigned short next_port = it->second.port;
+        sys->send(next_port, packet, size);
+        // printf("DATA:%d -> %d\n",router_id,dst);
+    }
+    else
+    {
+        printf("Destination %d unreachable from Router %d\n", header->dst, router_id);
+    }
+}
+
+void RoutingProtocolImpl::handle_alarm(void *data)
+{
+    long alarm_type = (long)data;
+    // printf("Router %d: handle_alarm called with type %ld\n", router_id, alarm_type);
+
+    if (alarm_type == ALARM_PING)
+    { // PING alarm
+        for (unsigned short i = 0; i < num_ports; i++)
+        {
+            send_ping(i);
+        }
+        sys->set_alarm(this, 10000, (void *)1);
+    }
+    else if (alarm_type == ALARM_CHECK)
+    {
+        // check_neighbor_status();
+        // sys->set_alarm(this, 1000, (void *)2);
+    }
+    else if (alarm_type == ALARM_DV)
+    {
+        // Round
+        send_dv_update(false);
+        sys->set_alarm(this, 30000, (void *)ALARM_DV);
+    }
+    else if (alarm_type == ALARM_DV_TIMEOUT)
+    {
+        check_DV_timeout();
+        sys->set_alarm(this, 1000, (void *)ALARM_DV_TIMEOUT);
+    }
+    else if (alarm_type == ALARM_LS)
+    {
+        send_ls_update();
+        sys->set_alarm(this, 30000, (void *)5); // 30秒后再次更新
+    }
+    else if (alarm_type == ALARM_LS_TIMEOUT)
+    {
+        check_link_state_timeout();
+        sys->set_alarm(this, 1000, (void *)6); // 1秒后再次检查
+    }
+}
+
 void RoutingProtocolImpl::send_ping(unsigned short port)
 {
     unsigned short size = sizeof(struct packet) + sizeof(unsigned int);
@@ -144,12 +259,13 @@ void RoutingProtocolImpl::handle_pong(unsigned short port, void *packet)
             // bool updated = false;
             if (routing_table.find(src_id) == routing_table.end())
             {
-                cout<<"new route entry"<<endl;
+                cout << "new route entry" << endl;
                 update_route(src_id, src_id, port, rtt);
                 // updated = true;
             }
-            else{
-                cout<<"existed route entry"<<endl;
+            else
+            {
+                cout << "existed route entry" << endl;
                 unsigned int current_time = sys->time();
                 unsigned int diff = rtt - old_rtt;
                 for (auto it : routing_table)
@@ -161,7 +277,7 @@ void RoutingProtocolImpl::handle_pong(unsigned short port, void *packet)
                         unsigned short n_port = find_neighbor(it.first);
                         if (n_port != INVALID_PORT)
                         {
-                            //neighbor use shorter direct path
+                            // neighbor use shorter direct path
                             auto n_neighbor = ports[n_port].neighbors[it.first];
                             unsigned int n_cost = n_neighbor.cost;
                             if (n_neighbor.isAlive && n_cost < it.second.cost)
@@ -171,7 +287,7 @@ void RoutingProtocolImpl::handle_pong(unsigned short port, void *packet)
                         }
                         else
                         {
-                            //update
+                            // update
                             it.second.cost += diff;
                             it.second.last_update = current_time;
                         }
@@ -194,60 +310,30 @@ void RoutingProtocolImpl::handle_pong(unsigned short port, void *packet)
     }
     else
     {
-        cout<<"pong time refreshing"<<endl;
-        if (protocol_type == P_DV)
-        {
-            for (auto it : routing_table)
-                if (it.second.next_hop == src_id || it.first == src_id)
-                {
-                    routing_table[it.first].last_update = sys->time();
-                }
-        }
+        routing_table[src_id].last_update = sys->time();
+//        cout << "pong time refreshing" << endl;
+//        if (protocol_type == P_DV)
+//        {
+//            for (auto it : routing_table)
+//                if (it.second.next_hop == src_id || it.first == src_id)
+//                {
+//                    routing_table[it.first].last_update = sys->time();
+//                }
+//        }
     }
 }
 
-void RoutingProtocolImpl::handle_alarm(void *data)
-{
-    long alarm_type = (long)data;
-    // printf("Router %d: handle_alarm called with type %ld\n", router_id, alarm_type);
+/*
+-----------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------
+---------------------DV----------------------DV------------------------DV----------------------------
+-----------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------
+*/
 
-    if (alarm_type == ALARM_PING)
-    { // PING alarm
-        for (unsigned short i = 0; i < num_ports; i++)
-        {
-            send_ping(i);
-        }
-        sys->set_alarm(this, 10000, (void *)1);
-    }
-    else if (alarm_type == ALARM_CHECK)
-    {
-        // check_neighbor_status();
-        // sys->set_alarm(this, 1000, (void *)2);
-    }
-    else if (alarm_type == ALARM_DV)
-    {
-        // Round
-        send_dv_update(false);
-        sys->set_alarm(this, 30000, (void *)ALARM_DV);
-    }
-    else if (alarm_type == ALARM_DV_TIMEOUT)
-    {
-        check_DV_timeout();
-        sys->set_alarm(this, 1000, (void *)ALARM_DV_TIMEOUT);
-    }
-    else if (alarm_type == ALARM_LS)
-    {
-        send_ls_update();
-        sys->set_alarm(this, 30000, (void *)5); // 30秒后再次更新
-    }
-    else if (alarm_type == ALARM_LS_TIMEOUT)
-    {
-        check_link_state_timeout();
-        sys->set_alarm(this, 1000, (void *)6); // 1秒后再次检查
-    }
-}
-
-// done
 void RoutingProtocolImpl::send_dv_update(bool triggered)
 {
     unsigned short num_routes = routing_table.size();
@@ -293,7 +379,7 @@ void RoutingProtocolImpl::send_dv_update(bool triggered)
             sys->send(port, packet, packet_size);
         }
     }
-    //print_DV_routing_table();
+    // print_DV_routing_table();
 }
 
 void RoutingProtocolImpl::print_DV_routing_table()
@@ -351,7 +437,7 @@ void RoutingProtocolImpl::handle_dv_packet(unsigned short port, void *packet)
     bool route_changed = false;
     // update src_id
     unsigned int src_cost = ports[port].neighbors[src_id].cost;
-    //update_route(src_id, src_id, port, src_cost);
+    // update_route(src_id, src_id, port, src_cost);
     if (routing_table.find(src_id) != routing_table.end())
     {
         routing_table[src_id].last_update = sys->time();
@@ -537,79 +623,29 @@ void RoutingProtocolImpl::delete_DV_invalid(unsigned short invalid_id)
     }
 }
 
-void RoutingProtocolImpl::recv(unsigned short port, void *packet, unsigned short size)
+void RoutingProtocolImpl::update_route(unsigned short dest, unsigned short next_hop,
+                                       unsigned short port, unsigned int cost)
 {
-    // 检查size 是否小于 packet 结构体大小、检查 port 是否有效
-    // if (size < sizeof(struct packet) || port >= num_ports)
-    // {
-    //     // delete[] (char *)packet;
-    //     printf("Error Packet");
-    //     return;
-    // }
-
-    struct packet *header = (struct packet *)packet;
-
-    // 转为主机字节序
-    ePacketType pkt_type = (ePacketType)(*((unsigned char *)packet));
-    unsigned short pkt_size = ntohs(header->size);
-    unsigned short pkt_src = ntohs(header->src);
-    unsigned short pkt_dst = ntohs(header->dst);
-
-    printf("Router %d:%d: Received %d packet %d -> %d\n", router_id, port, pkt_type, pkt_src, pkt_dst);
-    if (pkt_size != size)
-    {
-        printf("Packet size mismatch: expected %u, got %u\n", pkt_size, size);
-        return;
-    }
-
-    switch (pkt_type)
-    {
-        case PING:
-            handle_ping(port, packet);
-            break;
-        case PONG:
-            handle_pong(port, packet);
-            break;
-        case DV:
-            handle_dv_packet(port, packet);
-            break;
-        case LS:
-            handle_ls_packet(port, packet);
-            break;
-        case DATA:
-            handle_data(port, packet, size);
-            break;
-        default:
-            printf("Unknown packet type received: %d\n", pkt_type);
-            break;
-    }
-
-    // delete[] (char *)packet;
+    auto &route = routing_table[dest];
+    route.destination = dest;
+    route.next_hop = next_hop;
+    route.port = port;
+    route.cost = cost;
+    route.last_update = sys->time();
+    route.valid = true;
 }
-void RoutingProtocolImpl::handle_data(unsigned short port, void *packet, unsigned short size)
-{
-    struct packet *header = (struct packet *)packet;
-    unsigned short dst = ntohs(header->dst);
-    if (dst == router_id)
-    {
-        // printf("Own Packet:%d",router_id);
-        free(packet);
-        return;
-    }
-    cout<<"Handling Data"<<endl;
-    print_DV_routing_table();
-    auto it = routing_table.find(dst);
-    if (it != routing_table.end() && it->second.valid)
-    {
-        unsigned short next_port = it->second.port;
-        sys->send(next_port, packet, size);
-        // printf("DATA:%d -> %d\n",router_id,dst);
-    }
-    else
-    {
-        printf("Destination %d unreachable from Router %d\n", header->dst, router_id);
-    }
-}
+
+/*
+-----------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------
+----------------------------------------------LS-----------------------------------------------------
+-----------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------
+*/
+
 void RoutingProtocolImpl::send_ls_update()
 {
     printf("Router %d: Attempting to send LS update\n", router_id);
@@ -978,18 +1014,6 @@ void RoutingProtocolImpl::check_neighbor_status()
             send_ls_update();
         }
     }
-}
-
-void RoutingProtocolImpl::update_route(unsigned short dest, unsigned short next_hop,
-                                       unsigned short port, unsigned int cost)
-{
-    auto &route = routing_table[dest];
-    route.destination = dest;
-    route.next_hop = next_hop;
-    route.port = port;
-    route.cost = cost;
-    route.last_update = sys->time();
-    route.valid = true;
 }
 //            else
 //            {
