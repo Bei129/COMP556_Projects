@@ -351,18 +351,17 @@ void RoutingProtocolImpl::handle_dv_packet(unsigned short port, void *packet)
     bool route_changed = false;
     // update src_id
     unsigned int src_cost = ports[port].neighbors[src_id].cost;
-    update_route(src_id, src_id, port, src_cost);
-    // if (routing_table.find(src_id) != routing_table.end())
-    // {
-    //     routing_table[src_id].last_update = sys->time();
-    //     auto &route_src = routing_table[src_id];
-    //     unsigned short new_cost = DV_table[this->router_id];
-    //     if (route_src.cost > new_cost && route_src.next_hop != src_id)
-    //     {
-    //         update_route(src_id, src_id, port, new_cost);
-    //         route_changed = true;
-    //     }
-    // }
+    //update_route(src_id, src_id, port, src_cost);
+    if (routing_table.find(src_id) != routing_table.end())
+    {
+        routing_table[src_id].last_update = sys->time();
+        auto &route_src = routing_table[src_id];
+        if (route_src.cost > src_cost && route_src.next_hop != src_id)
+        {
+            update_route(src_id, src_id, port, src_cost);
+            route_changed = true;
+        }
+    }
 
     for (int i = 0; i < num_entries; i++)
     {
@@ -597,7 +596,8 @@ void RoutingProtocolImpl::handle_data(unsigned short port, void *packet, unsigne
         free(packet);
         return;
     }
-
+    cout<<"Handling Data"<<endl;
+    print_DV_routing_table();
     auto it = routing_table.find(dst);
     if (it != routing_table.end() && it->second.valid)
     {
