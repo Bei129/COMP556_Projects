@@ -130,6 +130,8 @@ void RoutingProtocolImpl::handle_data(unsigned short port, void *packet, unsigne
     if (it != routing_table.end() && it->second.valid)
     {
         unsigned short next_port = it->second.port;
+        cout<<"Handling data"<<endl;
+        print_DV_routing_table();
         sys->send(next_port, packet, size);
         // printf("DATA:%d -> %d\n",router_id,dst);
     }
