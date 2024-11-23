@@ -232,7 +232,7 @@ void RoutingProtocolImpl::handle_pong(unsigned short port, void *packet)
                 cout << "existed route entry" << endl;
                 unsigned int current_time = sys->time();
                 unsigned int diff = rtt - old_rtt;
-                for (auto it : routing_table)
+                for (auto &it : routing_table)
                 {
                     unsigned short dest = it.first;
                     unsigned short next_hop = it.second.next_hop;
@@ -244,20 +244,23 @@ void RoutingProtocolImpl::handle_pong(unsigned short port, void *packet)
                             // neighbor use shorter direct path
                             auto n_neighbor = ports[n_port].neighbors[it.first];
                             unsigned int n_cost = n_neighbor.cost;
-                            if (n_neighbor.isAlive && n_cost < it.second.cost)
+                            if ((n_neighbor.isAlive && n_cost < it.second.cost )|| it.first==src_id)
                             {
+                                //cout << "next_nop-> neighbor better"<<it.first<<"->update:cost" << n_cost<<endl;
                                 update_route(dest, dest, n_port, n_cost);
                             }
                         }
                         else
                         {
                             // update
+                            cout << "neighbor update" << endl;
                             it.second.cost += diff;
                             it.second.last_update = current_time;
                         }
                     }
                     else if (it.first == src_id && rtt < routing_table[src_id].cost)
                     {
+                        cout << "better neighbor" << endl;
                         update_route(src_id, src_id, port, rtt);
                     }
                 }
