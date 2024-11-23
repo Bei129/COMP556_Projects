@@ -1,5 +1,8 @@
 #include "RoutingProtocolImpl.h"
 #include <stdio.h>
+#include <vector>
+#include <iostream>
+#include <algorithm>
 #include <string.h>
 
 #ifdef _WIN32
@@ -133,47 +136,6 @@ void RoutingProtocolImpl::handle_data(unsigned short port, void *packet, unsigne
     else
     {
         printf("Destination %d unreachable from Router %d\n", header->dst, router_id);
-    }
-}
-
-void RoutingProtocolImpl::handle_alarm(void *data)
-{
-    long alarm_type = (long)data;
-    // printf("Router %d: handle_alarm called with type %ld\n", router_id, alarm_type);
-
-    if (alarm_type == ALARM_PING)
-    { // PING alarm
-        for (unsigned short i = 0; i < num_ports; i++)
-        {
-            send_ping(i);
-        }
-        sys->set_alarm(this, 10000, (void *)1);
-    }
-    else if (alarm_type == ALARM_CHECK)
-    {
-        // check_neighbor_status();
-        // sys->set_alarm(this, 1000, (void *)2);
-    }
-    else if (alarm_type == ALARM_DV)
-    {
-        // Round
-        send_dv_update(false);
-        sys->set_alarm(this, 30000, (void *)ALARM_DV);
-    }
-    else if (alarm_type == ALARM_DV_TIMEOUT)
-    {
-        check_DV_timeout();
-        sys->set_alarm(this, 1000, (void *)ALARM_DV_TIMEOUT);
-    }
-    else if (alarm_type == ALARM_LS)
-    {
-        send_ls_update();
-        sys->set_alarm(this, 30000, (void *)5); // 30秒后再次更新
-    }
-    else if (alarm_type == ALARM_LS_TIMEOUT)
-    {
-        check_link_state_timeout();
-        sys->set_alarm(this, 1000, (void *)6); // 1秒后再次检查
     }
 }
 
@@ -323,6 +285,47 @@ void RoutingProtocolImpl::handle_pong(unsigned short port, void *packet)
     }
 }
 
+void RoutingProtocolImpl::handle_alarm(void *data)
+{
+    long alarm_type = (long)data;
+    // printf("Router %d: handle_alarm called with type %ld\n", router_id, alarm_type);
+
+    if (alarm_type == ALARM_PING)
+    { // PING alarm
+        for (unsigned short i = 0; i < num_ports; i++)
+        {
+            send_ping(i);
+        }
+        sys->set_alarm(this, 10000, (void *)1);
+    }
+    else if (alarm_type == ALARM_CHECK)
+    {
+        // check_neighbor_status();
+        // sys->set_alarm(this, 1000, (void *)2);
+    }
+    else if (alarm_type == ALARM_DV)
+    {
+        // Round
+        send_dv_update(false);
+        sys->set_alarm(this, 30000, (void *)ALARM_DV);
+    }
+    else if (alarm_type == ALARM_DV_TIMEOUT)
+    {
+        check_DV_timeout();
+        sys->set_alarm(this, 1000, (void *)ALARM_DV_TIMEOUT);
+    }
+    else if (alarm_type == ALARM_LS)
+    {
+        send_ls_update();
+        sys->set_alarm(this, 30000, (void *)5); // 30秒后再次更新
+    }
+    else if (alarm_type == ALARM_LS_TIMEOUT)
+    {
+        check_link_state_timeout();
+        sys->set_alarm(this, 1000, (void *)6); // 1秒后再次检查
+    }
+}
+
 /*
 -----------------------------------------------------------------------------------------------------
 -----------------------------------------------------------------------------------------------------
@@ -387,7 +390,7 @@ void RoutingProtocolImpl::print_DV_routing_table()
     printf("---------------Router:%d-----------------\n", router_id);
     for (auto it : routing_table)
     {
-        printf("dst:%d  nxt:%d cost:%d\n", int(it.second.destination), int(it.second.next_hop), int(it.second.cost));
+        printf("dst:%d  nxt:%d cost:%d time:%.2lf\n", int(it.second.destination), int(it.second.next_hop), int(it.second.cost),double(it.second.last_update*1.0/1000));
     }
     printf("---------------------------------------\n");
 }
@@ -546,10 +549,11 @@ void RoutingProtocolImpl::check_DV_timeout()
                 route_changed = true;
                 printf("Router %d 1s Round Check: %d timeout\n", router_id, it.first);
                 unsigned short nid = it.first;
-                delete_DV_invalid(nid);
+                invalid_neighbor.push_back(nid);
             }
         }
     }
+    delete_DV_invalid(invalid_neighbor,route_changed);
     if (route_changed)
     {
         // trigger
@@ -577,7 +581,7 @@ unsigned short RoutingProtocolImpl::find_neighbor(unsigned short id)
     return INVALID_PORT;
 }
 
-void RoutingProtocolImpl::delete_DV_invalid(unsigned short invalid_id)
+void RoutingProtocolImpl::delete_DV_invalid(vector<unsigned short> invalid_ids,bool &updated)
 {
 
     vector<unsigned short> to_delete;
@@ -586,11 +590,10 @@ void RoutingProtocolImpl::delete_DV_invalid(unsigned short invalid_id)
         if (sys->time() - it.second.last_update >= ROUTE_TIMEOUT)
         {
             to_delete.emplace_back(it.first);
-            cout << "Route timeout:" << it.first << endl;
-            cout << "Route timeout:" << it.second.last_update << endl;
+            cout << "Route timeout:" << it.first<<""<< double(it.second.last_update*1.0/1000) << endl;
             continue;
         }
-        if (it.second.next_hop == invalid_id)
+        if (count(invalid_ids.begin(), invalid_ids.end(),it.first)!=0)
         {
             unsigned short find_port = find_neighbor(it.first);
             if (find_port == INVALID_PORT)
@@ -617,9 +620,10 @@ void RoutingProtocolImpl::delete_DV_invalid(unsigned short invalid_id)
 
     for (auto it : to_delete)
     {
-        cout << it << endl;
+        //cout << it << endl;
         if (routing_table.find(it) != routing_table.end())
-            routing_table.erase(it);
+            routing_table.erase(it),updated=true;
+
     }
 }
 

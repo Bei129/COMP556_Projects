@@ -58,7 +58,7 @@ private:
     unsigned short num_ports;
     std::vector<PortStatus> ports; // 数据结构不变，内容变了
     eProtocolType protocol_type; // 保存协议类型
-    
+
 
     // 包大小相关常量 这里是12
     static const unsigned short PING_PONG_PACK_SIZE = sizeof(struct packet) + sizeof(unsigned int);
@@ -79,7 +79,7 @@ private:
 
     // LS相关
     std::map<unsigned short, std::map<unsigned short, unsigned int>> link_state_table;
-    std::map<unsigned short, unsigned short> ls_sequence_number; 
+    std::map<unsigned short, unsigned short> ls_sequence_number;
     std::unordered_map<unsigned short, std::unordered_map<unsigned short, unsigned int>> ls_last_update;
 
     // 无效端口号
@@ -97,19 +97,19 @@ private:
     // DV相关方法
     std::map<unsigned short, RouteEntry> routing_table; //first-> router_id
     void send_dv_update(bool triggered = false);
-    void print_DV_routing_table();
     void handle_dv_packet(unsigned short port, void *packet);
     void check_DV_timeout();
+    void print_DV_routing_table();
     unsigned short find_neighbor(unsigned short id);
-    void delete_DV_invalid(unsigned short invalid_id);
+    void delete_DV_invalid(vector<unsigned short> invalid_ids,bool &udpated);
 
     void update_route(unsigned short dest, unsigned short next_hop,
                       unsigned short port, unsigned int cost);
 
     // LS相关方法
-    void send_ls_update(); 
-    void handle_ls_packet(unsigned short port, void *packet); 
-    void calculate_shortest_paths(); 
+    void send_ls_update();
+    void handle_ls_packet(unsigned short port, void *packet);
+    void calculate_shortest_paths();
     void check_link_state_timeout();
     unsigned short get_port_to_neighbor(unsigned short neighbor_id);
 };
