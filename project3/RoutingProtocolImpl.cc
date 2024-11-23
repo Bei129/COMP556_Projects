@@ -120,7 +120,7 @@ void RoutingProtocolImpl::handle_pong(unsigned short port, void *packet)
     //    }
     unsigned int old_rtt = neighbor.cost;
 
-    neighbor.cost = (unsigned short)rtt;
+    neighbor.cost = (unsigned int)rtt;
     neighbor.lastPongTime = sys->time();
     neighbor.isAlive = true;
 
@@ -144,74 +144,44 @@ void RoutingProtocolImpl::handle_pong(unsigned short port, void *packet)
             // bool updated = false;
             if (routing_table.find(src_id) == routing_table.end())
             {
+                cout<<"new route entry"<<endl;
                 update_route(src_id, src_id, port, rtt);
                 // updated = true;
             }
-            unsigned int current_time = sys->time();
-            unsigned short diff = rtt - old_rtt;
-            for (auto &it : routing_table)
-            {
-                if (it.second.next_hop == src_id)
+            else{
+                cout<<"existed route entry"<<endl;
+                unsigned int current_time = sys->time();
+                unsigned int diff = rtt - old_rtt;
+                for (auto it : routing_table)
                 {
-                    unsigned short n_port = find_neighbor(it.first);
-                    if (n_port != INVALID_PORT)
+                    unsigned short dest = it.first;
+                    unsigned short next_hop = it.second.next_hop;
+                    if (next_hop == src_id)
                     {
-                        auto &n_neighbor = ports[n_port].neighbors[it.first];
-                        if (n_neighbor.isAlive && n_neighbor.cost < it.second.cost)
+                        unsigned short n_port = find_neighbor(it.first);
+                        if (n_port != INVALID_PORT)
                         {
-                            update_route(it.first, it.first, n_port, n_neighbor.cost);
+                            //neighbor use shorter direct path
+                            auto n_neighbor = ports[n_port].neighbors[it.first];
+                            unsigned int n_cost = n_neighbor.cost;
+                            if (n_neighbor.isAlive && n_cost < it.second.cost)
+                            {
+                                update_route(dest, dest, n_port, n_cost);
+                            }
+                        }
+                        else
+                        {
+                            //update
+                            it.second.cost += diff;
+                            it.second.last_update = current_time;
                         }
                     }
-                    else
+                    else if (it.first == src_id && rtt < routing_table[src_id].cost)
                     {
-                        it.second.cost += diff;
-                        it.second.last_update = current_time;
+                        update_route(src_id, src_id, port, rtt);
                     }
                 }
-                else if (it.first == src_id && rtt < routing_table[src_id].cost)
-                {
-                    update_route(src_id, src_id, port, rtt);
-                }
             }
-
-            //            else
-            //            {
-            //                auto &route_entry = routing_table[src_id];
-            //                if (route_entry.next_hop == src_id || rtt < route_entry.cost)
-            //                {
-            //                    // 直连，或者新 RTT 更优
-            //                    route_entry.cost = rtt;
-            //                    route_entry.next_hop = src_id;
-            //                    route_entry.last_update = sys->time();
-            //                    updated = true;
-            //                }
-            //            }
-            //
-            //            if (updated)
-            //            {
-            //                // path update
-            //                unsigned int current_time = sys->time();
-            //                unsigned short diff = rtt - old_rtt;
-            //                for (auto &it : routing_table)
-            //                {
-            //                    if (it.second.next_hop == src_id)
-            //                    {
-            //                        it.second.cost += diff;
-            //                        it.second.last_update = current_time;
-            //                    }
-            //                    // better cost with direct neighbor:update
-            //                    for (unsigned short tport = 0; tport < num_ports; tport++)
-            //                    {
-            //                        auto &port_status = ports[tport];
-            //                        for (auto &pit : port_status.neighbors)
-            //                            if (pit.first == it.first && pit.second.isAlive && pit.second.cost < it.second.cost)
-            //                            {
-            //                                update_route(it.first, it.first, tport, pit.second.cost);
-            //                            }
-            //                    }
-            //                }
-            //            }
-            // trigger
             cout << "Handling Pong" << endl;
             print_DV_routing_table();
             send_dv_update(need_update);
@@ -224,6 +194,7 @@ void RoutingProtocolImpl::handle_pong(unsigned short port, void *packet)
     }
     else
     {
+        cout<<"pong time refreshing"<<endl;
         if (protocol_type == P_DV)
         {
             for (auto it : routing_table)
@@ -322,6 +293,7 @@ void RoutingProtocolImpl::send_dv_update(bool triggered)
             sys->send(port, packet, packet_size);
         }
     }
+    //print_DV_routing_table();
 }
 
 void RoutingProtocolImpl::print_DV_routing_table()
@@ -378,7 +350,8 @@ void RoutingProtocolImpl::handle_dv_packet(unsigned short port, void *packet)
     }
     bool route_changed = false;
     // update src_id
-    update_route(src_id, src_id, port, DV_table[this->router_id]);
+    unsigned int src_cost = ports[port].neighbors[src_id].cost;
+    update_route(src_id, src_id, port, src_cost);
     // if (routing_table.find(src_id) != routing_table.end())
     // {
     //     routing_table[src_id].last_update = sys->time();
@@ -437,7 +410,6 @@ void RoutingProtocolImpl::handle_dv_packet(unsigned short port, void *packet)
 
         if (it == routing_table.end() || !it->second.valid)
         {
-
             if (cost < INFINITY_COST)
             {
                 update_route(dest, src_id, port, total_cost);
@@ -1019,3 +991,41 @@ void RoutingProtocolImpl::update_route(unsigned short dest, unsigned short next_
     route.last_update = sys->time();
     route.valid = true;
 }
+//            else
+//            {
+//                auto &route_entry = routing_table[src_id];
+//                if (route_entry.next_hop == src_id || rtt < route_entry.cost)
+//                {
+//                    // 直连，或者新 RTT 更优
+//                    route_entry.cost = rtt;
+//                    route_entry.next_hop = src_id;
+//                    route_entry.last_update = sys->time();
+//                    updated = true;
+//                }
+//            }
+//
+//            if (updated)
+//            {
+//                // path update
+//                unsigned int current_time = sys->time();
+//                unsigned short diff = rtt - old_rtt;
+//                for (auto &it : routing_table)
+//                {
+//                    if (it.second.next_hop == src_id)
+//                    {
+//                        it.second.cost += diff;
+//                        it.second.last_update = current_time;
+//                    }
+//                    // better cost with direct neighbor:update
+//                    for (unsigned short tport = 0; tport < num_ports; tport++)
+//                    {
+//                        auto &port_status = ports[tport];
+//                        for (auto &pit : port_status.neighbors)
+//                            if (pit.first == it.first && pit.second.isAlive && pit.second.cost < it.second.cost)
+//                            {
+//                                update_route(it.first, it.first, tport, pit.second.cost);
+//                            }
+//                    }
+//                }
+//            }
+// trigger
