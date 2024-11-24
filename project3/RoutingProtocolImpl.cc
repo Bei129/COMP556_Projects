@@ -131,7 +131,8 @@ void RoutingProtocolImpl::handle_data(unsigned short port, void *packet, unsigne
     {
         unsigned short next_port = it->second.port;
         cout<<"Handling data"<<endl;
-        print_DV_routing_table();
+        // print_DV_routing_table();
+        print_LS_routing_table();
         sys->send(next_port, packet, size);
         // printf("DATA:%d -> %d\n",router_id,dst);
     }
@@ -205,10 +206,19 @@ void RoutingProtocolImpl::handle_pong(unsigned short port, void *packet)
 
     // 更新链路状态表
     link_state_table[router_id][src_id] = neighbor.cost;
+    link_state_table[src_id][router_id] = neighbor.cost;
     ls_last_update[router_id][src_id] = sys->time();
+    ls_last_update[src_id][router_id] = sys->time();
 
-    if (!was_alive || old_rtt != rtt)
+    printf("Router %d: Received PONG from %d, RTT=%dms (old RTT=%dms)\n",
+           router_id, src_id, neighbor.cost, old_rtt);
+
+    // 如果rtt变化超过 10ms，则触发更新
+    unsigned int rtt_difference = (old_rtt > neighbor.cost) ? (old_rtt - neighbor.cost) : (neighbor.cost - old_rtt);
+    if (!was_alive || rtt_difference > 10)
     {
+    // if (!was_alive || old_rtt != rtt)
+    // {
         need_update = true;
         printf("Time %d: Router %d Port %d connected to Router %d, RTT=%dms\n",
                sys->time(), router_id, port, src_id, rtt);
@@ -269,7 +279,7 @@ void RoutingProtocolImpl::handle_pong(unsigned short port, void *packet)
             print_DV_routing_table();
             send_dv_update(need_update);
         }
-        else if (protocol_type == P_LS)
+        if (protocol_type == P_LS)
         {
             printf("Router %d: Topology changed, sending LS update\n", router_id);
             send_ls_update();
@@ -751,8 +761,12 @@ void RoutingProtocolImpl::handle_ls_packet(unsigned short port, void *packet)
     {
         unsigned short neighbor_id = ntohs(payload[i * 2]);
         unsigned short cost = ntohs(payload[i * 2 + 1]);
+
         link_state_table[src_id][neighbor_id] = cost;
+        link_state_table[neighbor_id][src_id] = cost;
         ls_last_update[src_id][neighbor_id] = sys->time();
+        ls_last_update[neighbor_id][src_id] = sys->time();
+
         printf("Router %d: LS packet from %d reports neighbor %d with cost %d\n", router_id, src_id, neighbor_id, cost);
     }
 
@@ -765,6 +779,7 @@ void RoutingProtocolImpl::handle_ls_packet(unsigned short port, void *packet)
     printf("Router %d: Received LS packet from %d with sequence number %d\n", router_id, src_id, seq_num);
 
     calculate_shortest_paths();
+    // print_LS_routing_table();
 
     // Flood the LS packet to all ports except the one it was received on
     for (unsigned short i = 0; i < num_ports; i++)
@@ -808,23 +823,31 @@ void RoutingProtocolImpl::calculate_shortest_paths()
         }
     }
 
+    std::map<unsigned short, RouteEntry> new_routing_table; 
+
     std::unordered_map<unsigned short, unsigned int> distance;
     std::unordered_map<unsigned short, unsigned short> previous;
-    std::priority_queue<std::pair<int, int>, std::vector<std::pair<int, int>>, std::greater<std::pair<int, int>>> pq;
+    std::priority_queue<std::pair<unsigned int, unsigned short>, 
+                        std::vector<std::pair<unsigned int, unsigned short>>, 
+                        std::greater<std::pair<unsigned int, unsigned short>>> pq;
 
-    // 初始化距离表
-    for (const auto &neighbor : link_state_table[router_id])
-    {
-        distance[neighbor.first] = neighbor.second;
-        previous[neighbor.first] = router_id;
-        pq.emplace(neighbor.second, neighbor.first);
-    }
+    // Initialize source node
+    distance[router_id] = 0;
+    pq.emplace(0, router_id);
+
+    // // 初始化距离表
+    // for (const auto &neighbor : link_state_table[router_id])
+    // {
+    //     distance[neighbor.first] = neighbor.second;
+    //     previous[neighbor.first] = router_id;
+    //     pq.emplace(neighbor.second, neighbor.first);
+    // }
 
     while (!pq.empty())
     {
-        std::pair<int, int> top = pq.top();
+        auto top = pq.top();
         unsigned int dist = top.first;
-        int node = top.second;
+        unsigned short node = top.second;
         pq.pop();
 
         if (dist > distance[node])
@@ -832,12 +855,15 @@ void RoutingProtocolImpl::calculate_shortest_paths()
 
         for (const auto &neighbor : link_state_table[node])
         {
-            unsigned int new_cost = distance[node] + neighbor.second;
-            if (distance.find(neighbor.first) == distance.end() || new_cost < distance[neighbor.first])
+            unsigned short neighbor_id = neighbor.first;
+            unsigned int edge_cost = neighbor.second;
+            unsigned int new_cost = distance[node] + edge_cost;
+
+            if (distance.find(neighbor_id) == distance.end() || new_cost < distance[neighbor_id])
             {
-                distance[neighbor.first] = new_cost;
-                previous[neighbor.first] = node;
-                pq.emplace(new_cost, neighbor.first);
+                distance[neighbor_id] = new_cost;
+                previous[neighbor_id] = node;
+                pq.emplace(new_cost, neighbor_id);
             }
         }
     }
@@ -858,17 +884,22 @@ void RoutingProtocolImpl::calculate_shortest_paths()
 
             if (out_port != INVALID_PORT)
             {
-                routing_table[dest].destination = dest;
-                routing_table[dest].next_hop = next_hop;
-                routing_table[dest].port = out_port;
-                routing_table[dest].cost = distance[dest];
-                routing_table[dest].valid = true;
+                RouteEntry route;
+                route.destination = dest;
+                route.next_hop = next_hop;
+                route.port = out_port;
+                route.cost = distance[dest];
+                route.valid = true;
 
-                printf("Router %d: Path to %d via %d (port %d) with cost %d\n", router_id, dest, next_hop, out_port, distance[dest]);
+                new_routing_table[dest] = route;
+
+                printf("Router %d: Path to %d via %d (port %d) with cost %d\n", 
+                       router_id, dest, next_hop, out_port, distance[dest]);
             }
             else
             {
-                printf("Router %d: No valid port found to next_hop %d for destination %d\n", router_id, next_hop, dest);
+                printf("Router %d: No valid port found to next_hop %d for destination %d\n", 
+                       router_id, next_hop, dest);
             }
         }
     }
@@ -883,6 +914,8 @@ void RoutingProtocolImpl::calculate_shortest_paths()
             printf("Router %d: Destination %d no longer reachable, invalidating route\n", router_id, dest);
         }
     }
+
+    routing_table = std::move(new_routing_table);
 }
 
 void RoutingProtocolImpl::check_link_state_timeout()
@@ -961,6 +994,7 @@ void RoutingProtocolImpl::check_link_state_timeout()
     {
         calculate_shortest_paths();
         send_ls_update();
+        // print_LS_routing_table();
     }
 }
 
@@ -1062,3 +1096,23 @@ void RoutingProtocolImpl::check_neighbor_status()
 //                }
 //            }
 // trigger
+
+
+void RoutingProtocolImpl::print_LS_routing_table()
+{
+    printf("---------------Router:%d-----------------\n", router_id);
+    for (const auto &router_entry : link_state_table)
+    {
+        unsigned short src_router = router_entry.first;
+        printf("Source Router: %d\n", src_router);
+        for (const auto &neighbor_entry : router_entry.second)
+        {
+            unsigned short neighbor_id = neighbor_entry.first;
+            unsigned int cost = neighbor_entry.second;
+            double last_update_time = ls_last_update[src_router][neighbor_id] * 1.0 / 1000;
+
+            printf("  Neighbor:%d  Cost:%d  Last Updated:%.2lf\n", neighbor_id, cost, last_update_time);
+        }
+    }
+    printf("---------------------------------------\n");
+}

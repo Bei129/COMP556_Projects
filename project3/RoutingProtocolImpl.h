@@ -112,6 +112,7 @@ private:
     void calculate_shortest_paths();
     void check_link_state_timeout();
     unsigned short get_port_to_neighbor(unsigned short neighbor_id);
+    void print_LS_routing_table();
 };
 
 #endif
