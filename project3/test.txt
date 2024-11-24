@@ -1,0 +1,28 @@
+- Test1 and Test2
+These tests primarily focus on whether poison reverse functions correctly when changing link costs:
+Topology: A triangular topology is constructed, with events designed to simulate changes in link delays, specifically increasing the delay of the link between nodes 1 and 2.
+Key Objectives:
+   1. Test if, after the delay on link 1-2 increases, the path 1 → 3 → 2 becomes optimal, and the DV protocol can:
+      - Detect the path change correctly.
+      - Update the routing table appropriately.
+      - Apply the poison reverse rule correctly.     
+      - Avoid routing loops.
+
+- Test3 and Test4
+These tests focus on the behavior of the protocol during link failures and recoveries:
+Topology: A network with five nodes is created, including an intentionally high-delay link (3-5: 400ms).
+Key Test Scenarios:
+   1. When the link between nodes 2 and 3 fails and recovers, test if the protocol can:
+      - Detect the link state changes in a timely manner.
+      - Switch to an alternative path correctly.
+      - Ensure poison reverse rules remain effective during link failures.
+      - Converge back to the optimal path after the link recovers.
+
+- Test5 and Test6
+These tests focus on performance of Dijkstra’s algorithm in a larger-scale network:
+Topology: A 10-node network, including multiple links with varying delays to create clear optimal and suboptimal paths.
+Key Objectives:
+   - Validate the correctness of path calculations under a more complex topology.
+   - Test the efficiency of path computation in larger networks.
+   - Assess routing convergence performance during link state changes.
+   - Evaluate the overall efficiency of the protocol in handling a larger-scale network.
