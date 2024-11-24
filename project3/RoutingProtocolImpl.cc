@@ -217,8 +217,8 @@ void RoutingProtocolImpl::handle_pong(unsigned short port, void *packet)
     unsigned int rtt_difference = (old_rtt > neighbor.cost) ? (old_rtt - neighbor.cost) : (neighbor.cost - old_rtt);
     if (!was_alive || rtt_difference > 10)
     {
-    // if (!was_alive || old_rtt != rtt)
-    // {
+        // if (!was_alive || old_rtt != rtt)
+        // {
         need_update = true;
         printf("Time %d: Router %d Port %d connected to Router %d, RTT=%dms\n",
                sys->time(), router_id, port, src_id, rtt);
@@ -425,7 +425,7 @@ void RoutingProtocolImpl::handle_dv_packet(unsigned short port, void *packet)
     if (!num_entries || dst_id != router_id)
     {
         printf("Router %d: Wrong DV packet from %d\n", router_id, src_id);
-        delete[] (char *)packet;
+        free(packet);
         return;
     }
 
@@ -541,7 +541,8 @@ void RoutingProtocolImpl::handle_dv_packet(unsigned short port, void *packet)
         cout << "Handling DV" << endl;
         print_DV_routing_table();
     }
-    delete[] (char *)packet;
+    //delete[] (char *)packet;
+    free(packet);
 }
 
 // done
@@ -823,13 +824,13 @@ void RoutingProtocolImpl::calculate_shortest_paths()
         }
     }
 
-    std::map<unsigned short, RouteEntry> new_routing_table; 
+    std::map<unsigned short, RouteEntry> new_routing_table;
 
     std::unordered_map<unsigned short, unsigned int> distance;
     std::unordered_map<unsigned short, unsigned short> previous;
-    std::priority_queue<std::pair<unsigned int, unsigned short>, 
-                        std::vector<std::pair<unsigned int, unsigned short>>, 
-                        std::greater<std::pair<unsigned int, unsigned short>>> pq;
+    std::priority_queue<std::pair<unsigned int, unsigned short>,
+            std::vector<std::pair<unsigned int, unsigned short>>,
+            std::greater<std::pair<unsigned int, unsigned short>>> pq;
 
     // Initialize source node
     distance[router_id] = 0;
@@ -893,12 +894,12 @@ void RoutingProtocolImpl::calculate_shortest_paths()
 
                 new_routing_table[dest] = route;
 
-                printf("Router %d: Path to %d via %d (port %d) with cost %d\n", 
+                printf("Router %d: Path to %d via %d (port %d) with cost %d\n",
                        router_id, dest, next_hop, out_port, distance[dest]);
             }
             else
             {
-                printf("Router %d: No valid port found to next_hop %d for destination %d\n", 
+                printf("Router %d: No valid port found to next_hop %d for destination %d\n",
                        router_id, next_hop, dest);
             }
         }
