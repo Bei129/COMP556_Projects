@@ -26,3 +26,12 @@ Key Objectives:
    - Test the efficiency of path computation in larger networks.
    - Assess routing convergence performance during link state changes.
    - Evaluate the overall efficiency of the protocol in handling a larger-scale network.
+
+- Test7 and Test8
+These tests primarily focus on large-scale topologies with a significant number of nodes.  
+Topology: The networks consist of 30 and 40 nodes respectively, covering most scenarios.  
+Key Objectives:  
+   - Memory utilization for large routing tables.
+   - Performance under complex failure scenarios.
+   - Processing efficiency with numerous paths.
+   - Correct convergence in complex topologies.

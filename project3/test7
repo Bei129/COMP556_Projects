@@ -1,0 +1,99 @@
+[nodes]
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30
+
+[links]
+
+(1,2) delay 0.015 prob 0.0
+(2,3) delay 0.020 prob 0.0
+(3,4) delay 0.015 prob 0.0
+(4,5) delay 0.020 prob 0.0
+(5,6) delay 0.015 prob 0.0
+
+(1,7) delay 0.025 prob 0.0
+(2,8) delay 0.030 prob 0.0
+(3,9) delay 0.020 prob 0.0
+(4,10) delay 0.025 prob 0.0
+(5,11) delay 0.030 prob 0.0
+(6,12) delay 0.020 prob 0.0
+
+(7,8) delay 0.015 prob 0.0
+(8,9) delay 0.020 prob 0.0
+(9,10) delay 0.015 prob 0.0
+(10,11) delay 0.020 prob 0.0
+(11,12) delay 0.015 prob 0.0
+
+(7,13) delay 0.025 prob 0.0
+(8,14) delay 0.020 prob 0.0
+(9,15) delay 0.025 prob 0.0
+(10,16) delay 0.020 prob 0.0
+(11,17) delay 0.025 prob 0.0
+(12,18) delay 0.020 prob 0.0
+
+(13,14) delay 0.015 prob 0.0
+(14,15) delay 0.020 prob 0.0
+(15,16) delay 0.015 prob 0.0
+(16,17) delay 0.020 prob 0.0
+(17,18) delay 0.015 prob 0.0
+
+(13,19) delay 0.030 prob 0.0
+(14,20) delay 0.025 prob 0.0
+(15,21) delay 0.030 prob 0.0
+(16,22) delay 0.025 prob 0.0
+(17,23) delay 0.030 prob 0.0
+(18,24) delay 0.025 prob 0.0
+
+(19,20) delay 0.020 prob 0.0
+(20,21) delay 0.015 prob 0.0
+(21,22) delay 0.020 prob 0.0
+(22,23) delay 0.015 prob 0.0
+(23,24) delay 0.020 prob 0.0
+
+(19,25) delay 0.300 prob 0.0  
+(20,26) delay 0.250 prob 0.0
+(21,27) delay 0.300 prob 0.0
+(22,28) delay 0.250 prob 0.0
+(23,29) delay 0.300 prob 0.0
+(24,30) delay 0.250 prob 0.0
+
+
+(25,26) delay 0.020 prob 0.0
+(26,27) delay 0.015 prob 0.0
+(27,28) delay 0.020 prob 0.0
+(28,29) delay 0.015 prob 0.0
+(29,30) delay 0.020 prob 0.0
+(30,25) delay 0.015 prob 0.0
+
+[events]
+
+60.00  xmit (1,24)    # Test cross-network path
+80.00  xmit (25,6)    # Test backup ring to core
+100.00 xmit (13,28)   # Test diagonal path
+
+
+120.00 linkdying (3,4)    # Break core backbone
+140.00 xmit (1,6)        # Test core path rerouting
+160.00 xmit (7,12)       # Test middle layer routing
+180.00 changedelay (7,8)0.400  # Force middle path recalculation
+200.00 xmit (1,12)       # Test new optimal path
+
+
+220.00 linkdying (14,15)  # Break high layer mesh
+240.00 linkdying (19,20)  # Break outer ring
+260.00 xmit (13,24)      # Test complex rerouting
+280.00 xmit (25,30)      # Test backup ring routing
+
+
+300.00 linkcomingup (3,4)    # Restore core backbone
+320.00 changedelay (1,7)0.350  # Modify access path
+340.00 xmit (1,30)       # Test long path routing
+360.00 linkcomingup (14,15)  # Restore high layer mesh
+380.00 xmit (13,18)      # Test restored mesh routing
+
+
+400.00 linkdying (10,11)    # Force backup path usage
+420.00 xmit (1,18)       # Test complex backup routing
+440.00 linkcomingup (10,11) # Restore optimal path
+460.00 linkcomingup (19,20) # Full network restoration
+480.00 xmit (25,18)      # Final path validation
+
+500.00 end
