@@ -174,6 +174,7 @@ void RoutingProtocolImpl::handle_ping(unsigned short port, void *packet)
     // sys->send(port, pong_packet, size);
     sys->send(port, pong_packet, ntohs(ping_header->size));
     // delete[] pong_packet;
+    free(ping_header);
 }
 
 void RoutingProtocolImpl::handle_pong(unsigned short port, void *packet)
@@ -298,6 +299,7 @@ void RoutingProtocolImpl::handle_pong(unsigned short port, void *packet)
 //                }
 //        }
     }
+    free(header);
 }
 
 void RoutingProtocolImpl::handle_alarm(void *data)
