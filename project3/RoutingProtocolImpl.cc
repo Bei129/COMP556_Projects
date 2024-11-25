@@ -529,7 +529,7 @@ void RoutingProtocolImpl::check_DV_timeout()
     if (route_changed)
     {
         // trigger
-        //send_dv_update(true);
+        send_dv_update(true);
         //cout << "1s checking" << endl;
         //print_DV_routing_table();
     }
