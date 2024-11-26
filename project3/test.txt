@@ -8,7 +8,7 @@ Key Objectives:
       - Apply the poison reverse rule correctly.     
       - Avoid routing loops.
 
-- Test3 and Test4
+- Test3, Test4 and Test 9
 These tests focus on the behavior of the protocol during link failures and recoveries:
 Topology: A network with five nodes is created, including an intentionally high-delay link (3-5: 400ms).
 Key Test Scenarios:
@@ -17,7 +17,7 @@ Key Test Scenarios:
       - Switch to an alternative path correctly.
       - Ensure poison reverse rules remain effective during link failures.
       - Converge back to the optimal path after the link recovers.
-   2. Test 4 can check the Linkdying for the neighbor of neighbor by the timeout
+   2. Test 9 can check the Linkdying for the neighbor of neighbor by the timeout
 
 - Test5 and Test6
 These tests focus on performance of Dijkstra’s algorithm in a larger-scale network:
