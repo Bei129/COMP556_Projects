@@ -17,6 +17,7 @@ Key Test Scenarios:
       - Switch to an alternative path correctly.
       - Ensure poison reverse rules remain effective during link failures.
       - Converge back to the optimal path after the link recovers.
+   2. Test 4 can check the Linkdying for the neighbor of neighbor by the timeout
 
 - Test5 and Test6
 These tests focus on performance of Dijkstra’s algorithm in a larger-scale network:
