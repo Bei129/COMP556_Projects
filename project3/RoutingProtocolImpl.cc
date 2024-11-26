@@ -122,8 +122,8 @@ void RoutingProtocolImpl::handle_data(unsigned short port, void *packet, unsigne
     if (it != routing_table.end() && it->second.valid)
     {
         unsigned short next_port = it->second.port;
-        // cout << "Handling data" << endl;
-        // print_DV_routing_table();
+        cout << "Handling data" << endl;
+        print_DV_routing_table();
         // print_LS_routing_table();
         sys->send(next_port, packet, size);
         // printf("DATA:%d -> %d\n",router_id,dst);
@@ -494,8 +494,8 @@ void RoutingProtocolImpl::handle_dv_packet(unsigned short port, void *packet)
     {
         // trigger
         send_dv_update(true);
-        //cout << "Handling DV" << endl;
-        //print_DV_routing_table();
+        cout << "Handling DV" << endl;
+        print_DV_routing_table();
     }
     // delete[] (char *)packet;
     free(packet);
@@ -530,8 +530,8 @@ void RoutingProtocolImpl::check_DV_timeout()
     {
         // trigger
         send_dv_update(true);
-        //cout << "1s checking" << endl;
-        //print_DV_routing_table();
+        cout << "1s checking" << endl;
+        print_DV_routing_table();
     }
 }
 
@@ -562,15 +562,15 @@ void RoutingProtocolImpl::delete_DV_invalid(vector<unsigned short> invalid_ids, 
         if (sys->time() - it.second.last_update >= ROUTE_TIMEOUT)
         {
             to_delete.emplace_back(it.first);
-            //cout << "Route timeout:" << it.first << "" << double(it.second.last_update * 1.0 / 1000) << endl;
+            cout << "Route timeout:" << it.first << "" << double(it.second.last_update * 1.0 / 1000) << endl;
             continue;
         }
-        if (count(invalid_ids.begin(), invalid_ids.end(), it.first) != 0)
+        if (count(invalid_ids.begin(), invalid_ids.end(), it.second.next_hop) != 0)
         {
             unsigned short find_port = find_neighbor(it.first);
             if (find_port == INVALID_PORT)
             {
-                //cout << "Not Neighbor:" << it.first << endl;
+                cout << "Not Neighbor:" << it.first << endl;
                 to_delete.emplace_back(it.first);
             }
             else
@@ -587,7 +587,7 @@ void RoutingProtocolImpl::delete_DV_invalid(vector<unsigned short> invalid_ids, 
 
     for (auto it : to_delete)
     {
-        // cout << it << endl;
+        cout << it << endl;
         if (routing_table.find(it) != routing_table.end())
             routing_table.erase(it), updated = true;
     }
