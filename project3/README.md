@@ -1,10 +1,10 @@
 # COMP556 Project3
 
 ## Project Contributors
-- Fei Teng (ft28@rice.edu)
-- Lingyi Xu (lx28@rice.edu)
-- Jiawen Wang (jw223@rice.edu)
-- Siyu Chen (sc302@rice.edu)
+- **Fei Teng** (ft28@rice.edu): DV, General Structure, Quality Assurance
+- **Lingyi Xu** (lx28@rice.edu): LS, General Structure, Quality Assurance
+- **Jiawen Wang** (jw223@rice.edu): Quality Assurance
+- **Siyu Chen** (sc302@rice.edu): PING PONG
 
 ## Running
 1. Run `make` to build the simulator
